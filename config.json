@@ -44,7 +44,12 @@
       "Franklin",
       "Michael",
       "CJ"
-    ]
+    ],
+    "models": {
+      "openrouter": "elevenlabs/scribe-v2",
+      "groq": "whisper-large-v3-turbo",
+      "openai": "whisper-1"
+    }
   },
   "llm": {
     "cooldown_s": 180,

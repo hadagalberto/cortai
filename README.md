@@ -544,6 +544,55 @@ python cortai.py purge
 No painel: *configurações → limpeza de disco* tem **simular** e **limpar agora**.
 Também apaga arquivos órfãos em `out/` que não pertencem a nenhum registro.
 
+## Modelos e como trocar
+
+| papel | padrão | onde trocar |
+|---|---|---|
+| Transcrição | `elevenlabs/scribe-v2` | `asr.models.openrouter` |
+| Transcrição reserva | `whisper-large-v3-turbo` (Groq) | `asr.models.groq` |
+| Transcrição reserva | `whisper-1` (OpenAI) | `asr.models.openai` |
+| Gate/juiz | `typesafe/jev-1.14` | `classify.jev.model` |
+| Copy (título, gancho, hashtags) | `google/gemini-2.5-flash` | `llm.providers` |
+| Facecam | YuNet (ONNX local) | `models/yunet.onnx` |
+
+As transcrições testadas e o custo por minuto:
+
+| modelo | US$/min | timestamp por palavra |
+|---|---|---|
+| `elevenlabs/scribe-v2` | 0,0037 | sim |
+| `deepgram/nova-3` | 0,0043 | sim |
+| `openai/whisper-large-v3` | 0,0015 | não |
+| `whisper-1` (OpenAI direto) | 0,0060 | não |
+
+Sem timestamp por palavra a legenda cai para o modo frase inteira — funciona, mas
+perde o efeito de destaque.
+
+**A cadeia de transcrição** (`asr.chain`) é tentada em ordem: se a chave não existe ou
+o modelo falha, passa para o próximo. Para usar só um:
+
+```json
+"asr": { "chain": ["openrouter"] }
+```
+
+**A cascata de copy** (`llm.providers`) aceita qualquer endpoint OpenAI-compatible —
+OpenRouter, OpenAI direto, Groq, Ollama local. A primeira da lista que responder ganha;
+as seguintes entram quando ela cai (`cooldown_s` de 180s antes de voltar).
+
+```json
+"llm": {
+  "providers": [
+    { "name": "barato", "kind": "openai",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "google/gemini-2.5-flash", "key_env": "OPENROUTER_API_KEY" }
+  ]
+}
+```
+
+`kind: "anthropic"` fala a API nativa da Anthropic (sem OpenRouter no meio).
+
+Mudou modelo de ASR ou de copy? **Reinicie o supervisor** — os clientes são criados uma
+vez. Limiares, vídeo, marca e publicação mudam no próximo ciclo, sem reiniciar.
+
 ## Ajuste fino para o lançamento do GTA VI
 - `moments.peak_z` (1.3): baixe para `1.0` nos primeiros dias. Chat e áudio vão
   saturar; gate alto demais perde o pico, baixo demais gera lixo. Meça.

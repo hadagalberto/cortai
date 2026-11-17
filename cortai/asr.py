@@ -33,6 +33,20 @@ ENDPOINTS: dict[str, dict[str, str]] = {
 }
 
 
+def endpoint_for(name: str, cfg: dict[str, Any]) -> dict[str, str] | None:
+    """Modelo vem de asr.models[name]; sem isso usa o padrao da tabela."""
+    spec = ENDPOINTS.get(name)
+    if not spec:
+        return None
+    override = (cfg.get("models") or {}).get(name)
+    if override:
+        spec = {**spec, "model": str(override)}
+    base = (cfg.get("base_urls") or {}).get(name)
+    if base:
+        spec = {**spec, "url": str(base).rstrip("/") + "/audio/transcriptions"}
+    return spec
+
+
 class ASR:
     def __init__(self, cfg: dict[str, Any]):
         self.cfg = cfg
@@ -57,7 +71,7 @@ class ASR:
                 return True
             except Exception:
                 return False
-        spec = ENDPOINTS.get(name)
+        spec = endpoint_for(name, self.cfg)
         return bool(spec and os.environ.get(spec["key_env"]))
 
     def __bool__(self) -> bool:
@@ -69,10 +83,11 @@ class ASR:
             if self._down.get(name, 0) > now:
                 continue
             try:
+                spec = endpoint_for(name, self.cfg)
                 result = (
                     self._local_transcribe(wav)
                     if name == "local"
-                    else self._remote(wav, ENDPOINTS[name])
+                    else self._remote(wav, spec or ENDPOINTS[name])
                 )
                 if result:
                     result["backend"] = name

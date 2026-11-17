@@ -204,7 +204,11 @@ def _jev_gate(
             },
         }
 
-    res = jev.decide(_jev_state(transcript, signals, duration, frames), questions)
+    res = jev.decide(
+        _jev_state(transcript, signals, duration, frames),
+        questions,
+        model=str(cfg.get("model") or jev.DEFAULT_MODEL),
+    )
     if not res:
         return None
     answers = res["answers"]

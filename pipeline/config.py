@@ -34,6 +34,11 @@ DEFAULTS: dict[str, Any] = {
     "asr": {
         "language": "pt",
         "chain": ["openrouter", "groq", "openai", "local"],
+        "models": {
+            "openrouter": "elevenlabs/scribe-v2",
+            "groq": "whisper-large-v3-turbo",
+            "openai": "whisper-1",
+        },
         "local_model": "small",
         "keyterms": ["GTA", "GTA V", "GTA 6", "Los Santos", "Trevor", "Franklin", "Michael"],
     },

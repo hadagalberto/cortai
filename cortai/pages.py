@@ -153,8 +153,15 @@ function buildForm(){
 
   sec('Transcrição', [
     {p:'asr.language',l:'idioma',t:'text'},
+    {p:'asr.models.openrouter',l:'modelo via OpenRouter',t:'text'},
+    {p:'asr.models.groq',l:'modelo via Groq',t:'text'},
+    {p:'asr.models.openai',l:'modelo via OpenAI',t:'text'},
     {p:'asr.keyterms',l:'termos (separados por vírgula)',t:'list'},
-  ]);
+  ], 'trocar o modelo de ASR exige reiniciar o supervisor');
+
+  sec('Juiz (Jev)', [
+    {p:'classify.jev.model',l:'modelo do gate',t:'text'},
+  ], 'o Jev decide antes do LLM; a copy usa os modelos em config.json → llm.providers');
 
   const host=document.getElementById('forms');
   host.innerHTML=F.map((f,fi)=>(
