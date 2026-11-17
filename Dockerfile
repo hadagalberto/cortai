@@ -22,4 +22,4 @@ VOLUME ["/app/work", "/app/out"]
 
 EXPOSE 8787
 
-CMD ["python", "lives.py", "run"]
+CMD ["python", "cortai.py", "run"]

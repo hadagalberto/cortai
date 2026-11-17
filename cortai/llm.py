@@ -125,7 +125,7 @@ class LLMRouter:
                 "Authorization": f"Bearer {prov.key}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": "http://localhost",
-                "X-Title": "lives-clipper",
+                "X-Title": "cortai",
             },
             json={
                 "model": prov.model,

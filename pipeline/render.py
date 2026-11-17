@@ -344,7 +344,7 @@ def render_clip(
     else:
         filt += ";[v0]null[v1]"
 
-    from live.branding import build as build_branding
+    from cortai.branding import build as build_branding
 
     extra_inputs, brand_filter = build_branding("v1", "vout", 1, branding)
     filt += ";" + brand_filter
@@ -414,7 +414,7 @@ def render_still(
         filt += f";[v0]ass=filename='{_escape_filter_path(ass_path)}'[v1]"
     else:
         filt += ";[v0]null[v1]"
-    from live.branding import build as build_branding
+    from cortai.branding import build as build_branding
 
     extra_inputs, brand_filter = build_branding("v1", "vout", 1, branding)
     filt += ";" + brand_filter

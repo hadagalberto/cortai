@@ -36,7 +36,7 @@ def decide(
                 "Authorization": f"Bearer {key}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": "http://localhost",
-                "X-Title": "lives-clipper",
+                "X-Title": "cortai",
             },
             json={"model": model, "state": state, "questions": questions},
             timeout=timeout,

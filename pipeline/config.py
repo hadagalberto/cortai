@@ -127,7 +127,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
-ENV_PREFIX = "LIVES_"
+ENV_PREFIX = "CORTAI_"
 
 
 def _coerce(value: str, current: Any) -> Any:
@@ -152,7 +152,7 @@ def _coerce(value: str, current: Any) -> Any:
 
 
 def _apply_env(data: dict[str, Any]) -> dict[str, Any]:
-    """LIVES_RENDER__KARAOKE_SIZE=110 sobrepoe config.json sem editar arquivo.
+    """CORTAI_RENDER__KARAOKE_SIZE=110 sobrepoe config.json sem editar arquivo.
 
     Separador __ porque chaves legitimas tem underscore (auto_min_score).
     """

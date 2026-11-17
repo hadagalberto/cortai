@@ -1,4 +1,4 @@
-# lives — cortes automáticos de live
+# cortai — cortes automáticos de live
 
 Assiste N lives ao mesmo tempo, guarda os últimos minutos em disco, escuta o áudio,
 transcreve, classifica o momento com LLM (vendo frames) e cospe clipe vertical pronto
@@ -126,7 +126,7 @@ Feche e reabra o terminal para o `ffmpeg` entrar no PATH.
 
 ```powershell
 copy .env.example .env     # depois edite e ponha a OPENROUTER_API_KEY
-python lives.py doctor
+python cortai.py doctor
 ```
 
 Se aparecer tudo `[OK]`, está pronto. `doctor` diz exatamente o que falta.
@@ -148,7 +148,7 @@ Se aparecer tudo `[OK]`, está pronto. `doctor` diz exatamente o que falta.
 |---|---|---|
 | `.env` | chaves de API e senha do painel | sim |
 | `config.json` | ajustes de captura, corte, vídeo, marca, publicação, templates | pelo painel ou à mão |
-| `work/lives.db` | lives cadastradas, clipes, custo, log | não |
+| `work/cortai.db` | lives cadastradas, clipes, custo, log | não |
 | `work/panel_auth.json` | hash da senha, segredo da sessão | não |
 | `work/youtube_token.json` | token do OAuth do YouTube | não |
 | `work/<live>/facecam.json` | retângulo da facecam detectado | não |
@@ -158,15 +158,15 @@ Se aparecer tudo `[OK]`, está pronto. `doctor` diz exatamente o que falta.
 no `config.json`; reescrever `.env` de dentro do app corromperia comentários e citações.
 
 **Mas dá para controlar tudo pelo `.env`** se você quiser: qualquer caminho do config
-aceita override por ambiente, com `LIVES_` na frente e `__` separando os níveis.
+aceita override por ambiente, com `CORTAI_` na frente e `__` separando os níveis.
 
 ```bash
-LIVES_RENDER__MODE=crop
-LIVES_RENDER__KARAOKE_SIZE=110
-LIVES_MOMENTS__PEAK_Z=1.7
-LIVES_PUBLISH__AUTO=true
-LIVES_PUBLISH__AUTO_MIN_SCORE=8
-LIVES_ASR__KEYTERMS=GTA,Trevor,Franklin
+CORTAI_RENDER__MODE=crop
+CORTAI_RENDER__KARAOKE_SIZE=110
+CORTAI_MOMENTS__PEAK_Z=1.7
+CORTAI_PUBLISH__AUTO=true
+CORTAI_PUBLISH__AUTO_MIN_SCORE=8
+CORTAI_ASR__KEYTERMS=GTA,Trevor,Franklin
 ```
 
 Booleano aceita `true/1/on/sim`, lista aceita `a,b,c`, número é convertido sozinho.
@@ -176,18 +176,18 @@ painel. Use isso para testes e valores fixos; deixe o resto no painel.
 ## Uso
 
 ```powershell
-python lives.py add --url https://www.twitch.tv/canal1
-python lives.py add --url https://www.youtube.com/watch?v=XXXX
+python cortai.py add --url https://www.twitch.tv/canal1
+python cortai.py add --url https://www.youtube.com/watch?v=XXXX
 
-python lives.py run                 # roda todas as lives ativas
-python lives.py run --only canal1   # uma só
-python lives.py serve               # painel web em http://127.0.0.1:8787
-python lives.py clips               # lista o que saiu
-python lives.py selftest            # E2E offline, sem chave e sem internet
+python cortai.py run                 # roda todas as lives ativas
+python cortai.py run --only canal1   # uma só
+python cortai.py serve               # painel web em http://127.0.0.1:8787
+python cortai.py clips               # lista o que saiu
+python cortai.py selftest            # E2E offline, sem chave e sem internet
 ```
 
 Saída: `out/YYYY-MM-DD/<slug>/<slug>_HHMMSS_<score>.mp4` + `.txt` (legenda) + `.json`
-(metadados). Estado em `work/lives.db` (SQLite).
+(metadados). Estado em `work/cortai.db` (SQLite).
 
 ## Senha e acesso pela rede (opcional)
 
@@ -195,8 +195,8 @@ Se é tudo na sua máquina, **pule esta seção** — o painel já abre em `127.
 sem senha. Isto só serve se você quiser abrir de outro computador ou celular.
 
 ```powershell
-python lives.py passwd                  # define a senha do painel
-python lives.py serve --host 0.0.0.0    # expoe na rede local
+python cortai.py passwd                  # define a senha do painel
+python cortai.py serve --host 0.0.0.0    # expoe na rede local
 ```
 
 Sem senha configurada, o painel **gera uma automaticamente** e imprime no console na
@@ -211,7 +211,7 @@ e rode com `--secure-cookie`.
 
 ## Painel
 
-`python lives.py serve` abre `http://127.0.0.1:8787` — só local, sem dependência nova.
+`python cortai.py serve` abre `http://127.0.0.1:8787` — só local, sem dependência nova.
 
 - **preview ao vivo** por live: remux dos últimos ~6s do ring a cada 5s (~5s de atraso),
   sem re-encode. Consome CPU só enquanto a página está aberta.
@@ -261,13 +261,13 @@ Sem isso o upload responde `403` com "API não foi habilitada".
 2. **Criar credenciais** → **ID do cliente OAuth**
 3. Tipo: **App para computador** → **Criar**
 4. **Baixar JSON**
-5. Renomeie para `client_secret.json` e ponha na **raiz do projeto** (ao lado do `lives.py`)
+5. Renomeie para `client_secret.json` e ponha na **raiz do projeto** (ao lado do `cortai.py`)
 
 ### 5. Autorizar
 
 ```powershell
-python lives.py youtube auth
-python lives.py youtube status    # confere
+python cortai.py youtube auth
+python cortai.py youtube status    # confere
 ```
 
 Abre o navegador, você escolhe a conta, aceita. O token fica em
@@ -276,7 +276,7 @@ Abre o navegador, você escolhe a conta, aceita. O token fica em
 ### 6. Publicar
 
 ```powershell
-python lives.py publish --clip 15 --privacy unlisted
+python cortai.py publish --clip 15 --privacy unlisted
 ```
 
 Ou clique em **publicar no YouTube** no card do clipe. O envio roda em segundo plano,
@@ -317,8 +317,8 @@ Publicar não é imediato: vai para uma fila e o supervisor processa a cada 30s.
 - Depois disso o clipe fica em `error` com o motivo e o botão **reenviar** no painel.
 
 ```powershell
-python lives.py queue            # o que está na fila
-python lives.py queue --drain    # processa os vencidos agora
+python cortai.py queue            # o que está na fila
+python cortai.py queue --drain    # processa os vencidos agora
 ```
 
 ### Clipes repetidos
@@ -345,7 +345,7 @@ O token fica em `work/youtube_token.json`, e `work/` é volume do container — 
 **autorizar na sua máquina já basta** para publicar dentro do Docker:
 
 ```bash
-scp work/youtube_token.json usuario@vps:/caminho/lives/work/
+scp work/youtube_token.json usuario@vps:/caminho/cortai/work/
 docker compose restart painel
 ```
 
@@ -356,7 +356,7 @@ Se preferir autorizar de dentro do container, ponha o `client_secret.json` em `w
 (é o diretório montado) e libere a porta do retorno do OAuth:
 
 ```bash
-docker compose run --rm -p 8080:8080 painel python lives.py youtube auth --port 8080
+docker compose run --rm -p 8080:8080 painel python cortai.py youtube auth --port 8080
 ```
 
 Não monte o `client_secret.json` na raiz: ele não é necessário lá e sobe junto no build.
@@ -373,8 +373,8 @@ Sobe dois serviços com a mesma imagem: `cortes` (captura e cortes) e `painel`
 (web em `8787`). O `work/` guarda buffer, banco e tokens; `out/` guarda os clipes.
 
 ```bash
-docker compose run --rm painel python lives.py passwd   # definir senha
-docker compose run --rm painel python lives.py youtube auth
+docker compose run --rm painel python cortai.py passwd   # definir senha
+docker compose run --rm painel python cortai.py youtube auth
 ```
 
 Ou defina `PANEL_PASSWORD` no `.env` — o painel usa essa senha na primeira subida.
@@ -390,7 +390,7 @@ Três opções, da mais simples à mais acoplada:
    Cada `.json` tem `title`, `hook`, `caption`, `hashtags`, `start_ts`, `end_ts`, `score`.
 2. **SQLite** — tabela `clips`. Pegue `WHERE status='rendered'`, depois
    `UPDATE clips SET status='published', published=? WHERE id=?`.
-3. **Hook Python** — em `live/worker.py`, após `db.add_clip`, chame seu módulo.
+3. **Hook Python** — em `cortai/worker.py`, após `db.add_clip`, chame seu módulo.
 
 Nada aqui bloqueia: o clipe é gravado e o registro existe antes de qualquer postagem.
 
@@ -432,8 +432,8 @@ O sistema acha o quadradinho do streamer sozinho:
 Para conferir/forçar numa live específica:
 
 ```powershell
-python lives.py facecam canal1              # lê o buffer da live
-python lives.py facecam --file gravacao.mp4 # ou um arquivo
+python cortai.py facecam canal1              # lê o buffer da live
+python cortai.py facecam --file gravacao.mp4 # ou um arquivo
 ```
 
 O LLM então escolhe o enquadramento **por clipe**:
@@ -528,8 +528,8 @@ Ele é o único artefato que não dá para regenerar. A linha do banco fica (com
 Para ver o que sairia antes de apagar:
 
 ```powershell
-python lives.py purge --dry-run
-python lives.py purge
+python cortai.py purge --dry-run
+python cortai.py purge
 ```
 
 No painel: *configurações → limpeza de disco* tem **simular** e **limpar agora**.
@@ -600,7 +600,7 @@ O software não verifica permissão, não pergunta e não avisa. Essa parte é s
 ## Estrutura
 
 ```
-lives.py                 CLI
+cortai.py                CLI
 pipeline/                motor: áudio, detecção de picos, render, ASS
   audio.py               STFT -> loudness/flux/centroid por segundo
   moments.py             fusão de sinais, z-score robusto, picos

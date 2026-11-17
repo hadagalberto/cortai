@@ -1,4 +1,4 @@
-"""Painel web local (stdlib only). `python lives.py serve` e abre o navegador."""
+"""Painel web local (stdlib only). `python cortai.py serve` e abre o navegador."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from .db import DB
 PAGE = r"""<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>lives — cortes</title>
+<title>cortai — cortes</title>
 <style>
 :root{--bg:#0b0c0f;--card:#14161b;--line:#23262e;--fg:#e8eaed;--dim:#8b929e;--acc:#ffd400;--ok:#3ddc84;--bad:#ff5c5c}
 *{box-sizing:border-box}
@@ -95,7 +95,7 @@ dialog button{position:absolute;top:-34px;right:0;background:none;border:none;co
 </style></head>
 <body>
 <header>
-  <h1>lives <b>·</b> cortes</h1>
+  <h1>cortai <b>·</b> cortes</h1>
   <span class="pill" id="live-pill">—</span>
   <span class="pill" id="clip-pill">—</span>
   <span class="pill" id="cost-pill">—</span>
@@ -285,7 +285,7 @@ tick();setInterval(tick,3000);
 LOGIN_PAGE = r"""<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>lives — entrar</title>
+<title>cortai — entrar</title>
 <style>
 :root{--bg:#0b0c0f;--card:#14161b;--line:#23262e;--fg:#e8eaed;--dim:#8b929e;--acc:#ffd400;--bad:#ff5c5c}
 *{box-sizing:border-box}
@@ -302,7 +302,7 @@ button:hover{border-color:#4a515f}
 .err{margin-top:12px;color:var(--bad);font-size:12px}
 </style></head><body>
 <form method="post" action="/login">
-  <h1>lives <b>·</b> cortes</h1>
+  <h1>cortai <b>·</b> cortes</h1>
   <p>painel privado</p>
   <input type="password" name="password" placeholder="senha" autofocus autocomplete="current-password">
   <button type="submit">entrar</button>
@@ -386,7 +386,7 @@ def _sanitize_config(data: dict) -> dict:
 
 def _cookie(token: str, secure: bool, max_age: int) -> str:
     parts = [
-        f"lives_session={token}",
+        f"cortai_session={token}",
         "Path=/",
         "HttpOnly",
         "SameSite=Strict",
@@ -410,7 +410,7 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
             raw = self.headers.get("Cookie") or ""
             for part in raw.split(";"):
                 name, _, value = part.strip().partition("=")
-                if name == "lives_session":
+                if name == "cortai_session":
                     return value
             return None
 

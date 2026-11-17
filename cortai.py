@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """CLI do sistema de cortes para lives.
 
-  python lives.py add --url https://www.twitch.tv/canal
-  python lives.py run
-  python lives.py clips
-  python lives.py doctor
-  python lives.py selftest
+  python cortai.py add --url https://www.twitch.tv/canal
+  python cortai.py run
+  python cortai.py clips
+  python cortai.py doctor
+  python cortai.py selftest
 """
 
 from __future__ import annotations
@@ -21,11 +21,20 @@ from pathlib import Path
 from pipeline.config import Config
 from pipeline.util import ROOT, find_exe, load_dotenv, log
 
-from live.db import DB
+from cortai.db import DB
 
 
 def db_for(cfg: Config) -> DB:
-    return DB(cfg.work_dir / "lives.db")
+    path = cfg.work_dir / "cortai.db"
+    legacy = cfg.work_dir / "lives.db"
+    if legacy.exists() and not path.exists():
+        # migra o banco do nome antigo sem perder historico
+        for suffix in ("", "-wal", "-shm"):
+            src = Path(str(legacy) + suffix)
+            if src.exists():
+                src.replace(Path(str(path) + suffix))
+        print("banco migrado: lives.db -> cortai.db")
+    return DB(path)
 
 
 def detect_platform(url: str) -> str:
@@ -68,14 +77,14 @@ def cmd_rm(cfg: Config, args: argparse.Namespace) -> int:
 
 
 def cmd_list(cfg: Config, args: argparse.Namespace) -> int:
-    from live.supervisor import status
+    from cortai.supervisor import status
 
     status(cfg, db_for(cfg))
     return 0
 
 
 def cmd_run(cfg: Config, args: argparse.Namespace) -> int:
-    from live.supervisor import run
+    from cortai.supervisor import run
 
     return run(
         cfg,
@@ -120,7 +129,7 @@ def cmd_doctor(cfg: Config, args: argparse.Namespace) -> int:
             check(exe, False, str(exc))
 
     check("streamlink (opcional, mas melhor p/ twitch)",
-          __import__("live.capture", fromlist=["streamlink_cmd"]).streamlink_cmd() is not None,
+          __import__("cortai.capture", fromlist=["streamlink_cmd"]).streamlink_cmd() is not None,
           "pip install streamlink")
     try:
         import yt_dlp  # noqa: F401
@@ -137,7 +146,7 @@ def cmd_doctor(cfg: Config, args: argparse.Namespace) -> int:
     try:
         import cv2  # noqa: F401
 
-        from live.facecam import ensure_model
+        from cortai.facecam import ensure_model
 
         model = ensure_model()
         check(f"facecam: opencv {cv2.__version__} + YuNet", bool(model),
@@ -175,9 +184,9 @@ def cmd_doctor(cfg: Config, args: argparse.Namespace) -> int:
 
 def cmd_selftest(cfg: Config, args: argparse.Namespace) -> int:
     """E2E sem internet: gera video sintetico, segmenta, detecta e corta."""
-    from live import capture as cap
-    from live.ring import RingBuffer
-    from live.worker import process_cycle
+    from cortai import capture as cap
+    from cortai.ring import RingBuffer
+    from cortai.worker import process_cycle
 
     base = cfg.work_dir / "_selftest"
     if base.exists():
@@ -295,8 +304,8 @@ def cmd_serve(cfg: Config, args: argparse.Namespace) -> int:
     """Painel web local (ou na VPS, com senha)."""
     import getpass
 
-    from live.auth import Auth, config_path
-    from live.server import serve
+    from cortai.auth import Auth, config_path
+    from cortai.server import serve
 
     auth = Auth(config_path(cfg))
     seed = os.environ.get("PANEL_PASSWORD")
@@ -318,7 +327,7 @@ def cmd_serve(cfg: Config, args: argparse.Namespace) -> int:
         print("  senha do painel gerada automaticamente")
         print(f"  SENHA: {generated}")
         print("  anote agora — ela nao aparece de novo")
-        print("  troque depois com:  python lives.py passwd")
+        print("  troque depois com:  python cortai.py passwd")
         print(bar)
         print("", flush=True)
 
@@ -341,7 +350,7 @@ def cmd_youtube(cfg: Config, args: argparse.Namespace) -> int:
     """Configura a publicacao no YouTube (OAuth2)."""
     import json as _json
 
-    from live import publish_youtube as yt
+    from cortai import publish_youtube as yt
 
     if args.action == "status":
         print(_json.dumps(yt.status(), indent=2, ensure_ascii=False))
@@ -360,7 +369,7 @@ def cmd_queue(cfg: Config, args: argparse.Namespace) -> int:
     """Mostra/processa a fila de publicacao."""
     import json as _json
 
-    from live.publish import run_queue
+    from cortai.publish import run_queue
 
     db = db_for(cfg)
     if args.drain:
@@ -387,7 +396,7 @@ def cmd_purge(cfg: Config, args: argparse.Namespace) -> int:
     """Aplica a retencao: apaga clipes antigos, orfaos, log e custo."""
     import json as _json
 
-    from live.maintenance import purge
+    from cortai.maintenance import purge
 
     report = purge(cfg, db_for(cfg), dry_run=args.dry_run)
     print(_json.dumps(report, indent=2, ensure_ascii=False))
@@ -397,7 +406,7 @@ def cmd_purge(cfg: Config, args: argparse.Namespace) -> int:
 
 
 def cmd_publish(cfg: Config, args: argparse.Namespace) -> int:
-    from live.publish import publish_clip
+    from cortai.publish import publish_clip
 
     db = db_for(cfg)
     try:
@@ -412,7 +421,7 @@ def cmd_publish(cfg: Config, args: argparse.Namespace) -> int:
 def cmd_passwd(cfg: Config, args: argparse.Namespace) -> int:
     import getpass
 
-    from live.auth import Auth, config_path
+    from cortai.auth import Auth, config_path
 
     auth = Auth(config_path(cfg))
     pw = getpass.getpass("nova senha do painel: ")
@@ -429,8 +438,8 @@ def cmd_passwd(cfg: Config, args: argparse.Namespace) -> int:
 
 def cmd_facecam(cfg: Config, args: argparse.Namespace) -> int:
     """Detecta (ou redetecta) a facecam de uma live, para conferir o enquadramento."""
-    from live.facecam import FacecamCache, detect
-    from live.ring import RingBuffer
+    from cortai.facecam import FacecamCache, detect
+    from cortai.ring import RingBuffer
 
     if args.file:
         window = Path(args.file).expanduser().resolve()

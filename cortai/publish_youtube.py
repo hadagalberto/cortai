@@ -2,8 +2,8 @@
 
 Como usar:
   1. baixe o client_secret.json do Google Cloud e ponha na raiz do projeto
-  2. python lives.py youtube auth      (abre o navegador, autoriza, salva o token)
-  3. python lives.py publish --clip 15 --privacy unlisted
+  2. python cortai.py youtube auth      (abre o navegador, autoriza, salva o token)
+  3. python cortai.py publish --clip 15 --privacy unlisted
 """
 
 from __future__ import annotations
@@ -73,11 +73,11 @@ def _credentials():
     from google.oauth2.credentials import Credentials
 
     if not TOKEN_PATH.exists():
-        raise YouTubeError("sem token: rode 'python lives.py youtube auth'")
+        raise YouTubeError("sem token: rode 'python cortai.py youtube auth'")
     creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
     if not creds.valid:
         if not creds.refresh_token:
-            raise YouTubeError("token sem refresh: rode 'python lives.py youtube auth' de novo")
+            raise YouTubeError("token sem refresh: rode 'python cortai.py youtube auth' de novo")
         creds.refresh(Request())
         TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
     return creds

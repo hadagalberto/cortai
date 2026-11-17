@@ -40,7 +40,7 @@ def collect(db, cfg, days=7):
         db.update_clip(clip.id, analytics=stats)
 ```
 
-CLI: `lives.py analytics` (coleta) e `lives.py report` (tabela score × views).
+CLI: `cortai.py analytics` (coleta) e `cortai.py report` (tabela score × views).
 
 ## 2. Um token por canal
 
@@ -50,7 +50,7 @@ upload escolhe pelo template da live.
 
 ## 3. Instalador / updater
 
-Amigos clonam o repo e fazem `git pull` na mão. Um `lives.py update` (git pull +
+Amigos clonam o repo e fazem `git pull` na mão. Um `cortai.py update` (git pull +
 pip install + aviso de restart) economizaria suporte. Um pacote zip com ffmpeg
 embutido seria o próximo nível.
 

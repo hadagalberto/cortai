@@ -3,7 +3,7 @@
 SETTINGS_PAGE = r"""<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>lives — configurações</title>
+<title>cortai — configurações</title>
 <style>
 :root{--bg:#0b0c0f;--card:#14161b;--line:#23262e;--fg:#e8eaed;--dim:#8b929e;--acc:#ffd400;--ok:#3ddc84;--bad:#ff5c5c}
 *{box-sizing:border-box}
@@ -41,7 +41,7 @@ aside{position:sticky;top:64px;display:grid;gap:12px}
 </style></head>
 <body>
 <header>
-  <h1>lives <b>·</b> configurações</h1>
+  <h1>cortai <b>·</b> configurações</h1>
   <a href="/">← painel</a>
   <span class="spacer"></span>
   <select id="tpl" class="btn" title="template"></select>

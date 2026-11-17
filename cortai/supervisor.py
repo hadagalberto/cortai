@@ -31,7 +31,7 @@ def run(
 
     initial = active_rows()
     if not initial:
-        log("[supervisor] nenhuma live ativa. Cadastre no painel ou: python lives.py add --url ...")
+        log("[supervisor] nenhuma live ativa. Cadastre no painel ou: python cortai.py add --url ...")
         return 1
 
     router = router_from_config(cfg["llm"])

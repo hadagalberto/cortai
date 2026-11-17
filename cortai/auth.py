@@ -132,7 +132,7 @@ class Auth:
         if wait:
             return False, f"muitas tentativas. tente em {wait}s"
         if not self.enabled:
-            return False, "senha nao configurada (python lives.py passwd)"
+            return False, "senha nao configurada (python cortai.py passwd)"
         if not verify_password(password, self.password_hash or ""):
             self.record_fail(ip)
             return False, "senha incorreta"
