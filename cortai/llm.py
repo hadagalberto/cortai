@@ -150,6 +150,8 @@ class LLMRouter:
                 "out": int(usage.get("completion_tokens") or 0),
                 # custo real cobrado pelo provedor (imagens tem preco proprio)
                 "cost": float(usage.get("cost") or 0.0),
+                # BYOK: OpenRouter cobra 0, quem cobra e o provedor direto
+                "byok": bool(usage.get("is_byok")),
             },
         )
 

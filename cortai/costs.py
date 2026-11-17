@@ -18,8 +18,9 @@ def asr_cost(cfg: dict[str, Any], backend: str | None, seconds: float,
 def llm_cost(cfg: dict[str, Any], model: str | None, usage: dict[str, Any] | None) -> float:
     if not usage:
         return 0.0
-    # o provedor devolve o custo exato (inclui preco de imagem); a tabela e fallback
-    if float(usage.get("cost") or 0) > 0:
+    # o provedor devolve o custo exato (inclui preco de imagem); em BYOK o custo
+    # da OpenRouter vem 0 e quem cobra e a Anthropic/OpenAI direto -> usa tabela
+    if float(usage.get("cost") or 0) > 0 and not usage.get("byok"):
         return round(float(usage["cost"]), 6)
     if not model:
         return 0.0
