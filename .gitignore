@@ -1,0 +1,30 @@
+# runtime
+work/
+out/
+models/
+.env
+.env.*
+!.env.example
+
+# backups e logs
+*.log
+config.json.bak
+work_*.log
+
+# ferramentas
+.playwright-mcp/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# credenciais do google
+client_secret.json
+token.json
+
+# sistema
+.DS_Store
+Thumbs.db
+desktop.ini

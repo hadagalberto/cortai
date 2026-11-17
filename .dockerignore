@@ -1,0 +1,12 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+.venv
+work
+out
+models
+.env
+client_secret.json
+work_*.log
+playwright-report
