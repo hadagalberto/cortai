@@ -1,8 +1,16 @@
 # cortai — cortes automáticos de live
 
 Assiste N lives ao mesmo tempo, guarda os últimos minutos em disco, escuta o áudio,
-transcreve, classifica o momento com LLM (vendo frames) e cospe clipe vertical pronto
-para publicar. A publicação fica fora do escopo — o sistema entrega arquivo + metadados.
+transcreve, classifica o momento com LLM (vendo frames), corta em vertical com legenda
+e publica no YouTube.
+
+```bash
+git clone https://github.com/hadagalberto/cortai.git
+cd cortai
+```
+
+Precisa de **Python 3.10+**, **ffmpeg com libass** e uma chave do **OpenRouter**.
+Passo a passo em [Instalação](#instalação).
 
 ## Como funciona
 
@@ -23,11 +31,12 @@ para publicar. A publicação fica fora do escopo — o sistema entrega arquivo 
                      |                                        ^
                      |  só o candidato (~10% do tempo)        |
                      v                                        |
-              [ASR: whisper] -> texto -------------> [LLM vê 3 frames + texto]
-                                                          OpenRouter
+        [ASR scribe-v2] -> texto + gate Jev -> [LLM vê 6 frames + texto]
+                                                  OpenRouter
 ```
 
-Só olha o trecho que passou do gate. É o que mantém o custo em ~US$2/dia em vez de US$40.
+Só olha o trecho que passou do gate. É o que mantém o custo em ~US$1,80/dia em 5 lives
+em vez de ~US$40.
 
 ## Instalação
 
