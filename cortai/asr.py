@@ -226,11 +226,13 @@ def _shape(payload: dict[str, Any], duration: float | None = None) -> dict[str, 
         return None
     if not text:
         text = " ".join(s["text"] for s in segments)
+    usage = payload.get("usage") or {}
     return {
         "text": text,
         "segments": segments,
         "language": payload.get("language"),
-        "usage_seconds": round(float((payload.get("usage") or {}).get("seconds") or duration or 0.0), 2),
+        "usage_seconds": round(float(usage.get("seconds") or duration or 0.0), 2),
+        "usage_cost": round(float(usage.get("cost") or 0.0), 6),
     }
 
 

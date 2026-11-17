@@ -552,8 +552,29 @@ Também apaga arquivos órfãos em `out/` que não pertencem a nenhum registro.
 | Transcrição reserva | `whisper-large-v3-turbo` (Groq) | `asr.models.groq` |
 | Transcrição reserva | `whisper-1` (OpenAI) | `asr.models.openai` |
 | Gate/juiz | `typesafe/jev-1.14` | `classify.jev.model` |
-| Copy (título, gancho, hashtags) | `google/gemini-2.5-flash` | `llm.providers` |
+| Copy (título, gancho, hashtags) | `z-ai/glm-5.3-flash` | `llm.providers[0]` |
+| Copy reserva | `google/gemini-2.5-flash` | `llm.providers[1]` |
 | Facecam | YuNet (ONNX local) | `models/yunet.onnx` |
+
+Medido no mesmo clipe real (3 frames, ~1.700 tokens de entrada):
+
+| modelo | tempo | custo/chamada | observação |
+|---|---|---|---|
+| `z-ai/glm-5.3-flash` | 2,7s | **US$ 0,00073** | escolhido |
+| `google/gemini-2.5-flash` | 3,1s | US$ 0,00104 | reserva |
+| `qwen/qwen3.7-flash` | — | — | **400: data inspection** — recusou conteúdo de GTA |
+| `deepseek/deepseek-v4.1-flash` | — | — | resposta vazia, não suporta `json_object` |
+
+Dois aprendizados que não estão no preço: alguns provedores **recusam conteúdo de GTA**
+(violência, nudez) no meio do lote, e modelo pequeno sem suporte a `response_format`
+devolve texto vazio. Teste antes de trocar.
+
+O custo exibido no painel vem do campo `usage.cost` da resposta, não de tabela — imagem
+tem preço próprio por provedor e a tabela mentiria.
+
+`classify.copy_frames` (padrão 3) controla quantos frames vão para a copy. O Jev já
+julgou com todos; a copy precisa de menos. Zerar deixa a chamada só texto (mais barata,
+mas título pior em momento sem fala).
 
 As transcrições testadas e o custo por minuto:
 

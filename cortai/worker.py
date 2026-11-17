@@ -185,7 +185,8 @@ def process_cycle(
                 transcript = _shift(raw, 0.0)
                 if db is not None:
                     c = costs.asr_cost(
-                        cfg["pricing"], asr_backend, float(raw.get("usage_seconds") or 0)
+                        cfg["pricing"], asr_backend, float(raw.get("usage_seconds") or 0),
+                        raw.get("usage_cost"),
                     )
                     if c > 0:
                         db.add_usage(

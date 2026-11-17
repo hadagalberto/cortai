@@ -148,6 +148,8 @@ class LLMRouter:
             {
                 "in": int(usage.get("prompt_tokens") or 0),
                 "out": int(usage.get("completion_tokens") or 0),
+                # custo real cobrado pelo provedor (imagens tem preco proprio)
+                "cost": float(usage.get("cost") or 0.0),
             },
         )
 
@@ -199,6 +201,7 @@ class LLMRouter:
             {
                 "in": int(usage.get("input_tokens") or 0),
                 "out": int(usage.get("output_tokens") or 0),
+                "cost": float((data.get("usage") or {}).get("cost") or 0.0),
             },
         )
 

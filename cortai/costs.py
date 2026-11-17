@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 
-def asr_cost(cfg: dict[str, Any], backend: str | None, seconds: float) -> float:
+def asr_cost(cfg: dict[str, Any], backend: str | None, seconds: float,
+             api_cost: float | None = None) -> float:
+    if api_cost:
+        return round(float(api_cost), 6)
     if not backend or seconds <= 0:
         return 0.0
     per_min = float((cfg.get("asr") or {}).get(backend, 0.0) or 0.0)
@@ -13,7 +16,12 @@ def asr_cost(cfg: dict[str, Any], backend: str | None, seconds: float) -> float:
 
 
 def llm_cost(cfg: dict[str, Any], model: str | None, usage: dict[str, Any] | None) -> float:
-    if not model or not usage:
+    if not usage:
+        return 0.0
+    # o provedor devolve o custo exato (inclui preco de imagem); a tabela e fallback
+    if float(usage.get("cost") or 0) > 0:
+        return round(float(usage["cost"]), 6)
+    if not model:
         return 0.0
     table = cfg.get("llm") or {}
     price = table.get(model) or table.get("default") or {"in": 0.5, "out": 2.0}

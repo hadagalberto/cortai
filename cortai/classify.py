@@ -279,9 +279,11 @@ def classify(
         user_text += "\n\nFacecam do streamer: detectada. Voce pode usar layout face/pip/game."
     else:
         user_text += "\n\nFacecam: NAO detectada. Use obrigatoriamente layout game."
+    # o Jev ja julgou com todos os frames; a copy precisa de menos
+    copy_frames = frames[: int(gate_cfg.get("copy_frames", 3))] if frames else None
     try:
-        if frames:
-            verdict = router.chat_json_with_images(SYSTEM, user_text, frames)
+        if copy_frames:
+            verdict = router.chat_json_with_images(SYSTEM, user_text, copy_frames)
         else:
             verdict = router.chat_json(SYSTEM, user_text)
     except Exception as exc:
