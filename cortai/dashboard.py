@@ -154,6 +154,7 @@ def snapshot(cfg: Any, db: DB) -> dict[str, Any]:
         "publish": yt.status(),
         "auto_publish": _auto_publish(cfg),
         "published_today": _published_today(db),
+        "queue_pending": db.pending_publishes(),
         "cost": {
             "hoje": _cost(cfg, db, _start_of_day()),
             "total": _cost(cfg, db, 0.0),
