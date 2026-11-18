@@ -31,8 +31,17 @@ def run(
 
     initial = active_rows()
     if not initial:
-        log("[supervisor] nenhuma live ativa. Cadastre no painel ou: python cortai.py add --url ...")
-        return 1
+        if once or only:
+            log("[supervisor] nenhuma live ativa. Cadastre no painel ou: python cortai.py add --url ...")
+            return 1
+        # no Docker o container sobe antes de existir live: fica esperando em vez de morrer
+        log("[supervisor] nenhuma live ativa; aguardando cadastro no painel...")
+        try:
+            while not initial:
+                time.sleep(5)
+                initial = active_rows()
+        except KeyboardInterrupt:
+            return 0
 
     router = router_from_config(cfg["llm"])
     asr = ASR(cfg["asr"])

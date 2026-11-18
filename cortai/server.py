@@ -468,7 +468,12 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
                 # grava em arquivo temporario e troca: nunca deixa config pela metade
                 tmp = ROOT / "config.json.tmp"
                 tmp.write_text(text, encoding="utf-8", newline="\n")
-                os.replace(tmp, path)
+                try:
+                    os.replace(tmp, path)
+                except OSError:
+                    # bind mount de arquivo unico (Docker) nao aceita rename por cima
+                    path.write_text(text, encoding="utf-8", newline="\n")
+                    tmp.unlink(missing_ok=True)
                 cfg.data = merged
             except Exception as exc:
                 log(f"[config] falha ao salvar: {exc}")

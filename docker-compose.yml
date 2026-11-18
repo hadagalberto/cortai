@@ -9,7 +9,7 @@
     volumes:
       - ./work:/app/work
       - ./out:/app/out
-      - ./config.json:/app/config.json:ro
+      - ./config.json:/app/config.json
       - ./branding:/app/branding
     restart: unless-stopped
     init: true
@@ -28,7 +28,7 @@
     volumes:
       - ./work:/app/work
       - ./out:/app/out
-      - ./config.json:/app/config.json:ro
+      - ./config.json:/app/config.json
       - ./branding:/app/branding
     depends_on:
       - cortes
