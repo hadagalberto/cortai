@@ -239,6 +239,13 @@ No topo da aba **lives** tem um campo de URL. Cole `https://www.twitch.tv/canal`
 clique em **adicionar** — o supervisor detecta e começa a capturar **sem reiniciar**.
 O botão **parar** encerra aquela live na hora. O slug é derivado da URL.
 
+O botão **remover** apaga o canal do painel junto com os clipes dele: registros no banco,
+vídeos em `out/`, miniaturas e o buffer em `work/<slug>/`. O que já foi publicado no
+YouTube continua no ar. A ação pede confirmação e não tem desfazer.
+
+Os clipes ficam agrupados em **accordions por canal** — só o canal mais recente abre
+por padrão, e o estado de aberto/fechado sobrevive às atualizações de 3s do painel.
+
 ## Publicar no YouTube
 
 Seis passos, uma vez só. ~10 minutos.
