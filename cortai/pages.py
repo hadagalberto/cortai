@@ -540,8 +540,9 @@ function templatesApplied(cfg,name){
 async function saveAll(){
   const payload=JSON.parse(JSON.stringify(S)); delete payload.__base;
   const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const j=await r.json().catch(()=>({}));
   if(r.ok){ dirty=false; const st=document.getElementById('status'); st.textContent='Salvo · vale no próximo ciclo'; st.className='st'; toast('Configuração salva'); }
-  else { toast('Erro ao salvar'); }
+  else { toast('Erro ao salvar: '+(j.error||('HTTP '+r.status))); }
 }
 
 async function reloadConfig(){ await load(); toast('Alterações descartadas'); }
@@ -553,7 +554,8 @@ async function saveAsTemplate(){
   ['mode','fps','crf','preset','blur_sigma','karaoke_size','karaoke_words','karaoke_margin_v','hook_size','hook_caption','burn_subs','pip_scale','pip_position','pip_offset_y'].forEach(k=>{ if(g('render.'+k)!==undefined) body.render[k]=g('render.'+k); });
   ['handle','cta','accent','logo','logo_position','logo_width','handle_offset','cta_offset'].forEach(k=>{ if(g('branding.'+k)!==undefined) body.branding[k]=g('branding.'+k); });
   const r=await fetch('/api/templates/'+encodeURIComponent(name),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  toast(r.ok?('Template "'+name+'" salvo'):'Erro ao salvar template');
+  const j=await r.json().catch(()=>({}));
+  toast(r.ok?('Template "'+name+'" salvo'):('Erro ao salvar template: '+(j.error||r.status)));
   await load();
 }
 

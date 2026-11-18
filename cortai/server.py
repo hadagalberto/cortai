@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
@@ -46,6 +47,39 @@ button:hover{border-color:#4a515f}
   <button type="submit">Entrar</button>
   {erro}
 </form></body></html>"""
+
+
+def _decode_body(body: bytes) -> str:
+    """Decodifica o corpo do POST tolerando clientes que nao usam UTF-8.
+
+    PowerShell 5.1 e curl lendo arquivo ANSI mandam acento em cp1252; sem isso
+    o json.loads estoura "'utf-8' codec can't decode byte" e vira 400 sem sentido.
+    """
+    raw = body or b""
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    for enc in ("utf-8", "cp1252", "latin-1"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", "replace")
+
+
+def _json_body(body: bytes) -> Any:
+    """Le o corpo como JSON, com mensagem de erro que diz o que aconteceu."""
+    text = _decode_body(body).strip()
+    if not text:
+        return {}
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"JSON inválido: {exc.msg} (linha {exc.lineno}, coluna {exc.colno})"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"o corpo precisa ser um objeto JSON (veio {type(payload).__name__})")
+    return payload
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -267,7 +301,7 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
                 from .assets import save_b64
 
                 try:
-                    payload = json.loads(body or b"{}")
+                    payload = _json_body(body)
                     result = save_b64(
                         str(payload.get("kind") or "bg"),
                         str(payload.get("name") or "arquivo.png"),
@@ -288,7 +322,7 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
                 from .maintenance import purge as run_purge
 
                 try:
-                    payload = json.loads(body or b"{}")
+                    payload = _json_body(body)
                     report = run_purge(cfg, db, dry_run=bool(payload.get("dry_run")))
                     self._send(200, json.dumps(report, ensure_ascii=False).encode(),
                                "application/json; charset=utf-8")
@@ -305,7 +339,7 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
             mstpl = re.match(r"^/api/streams/([^/]+)/template$", path)
             if mstpl:
                 try:
-                    payload = json.loads(body or b"{}")
+                    payload = _json_body(body)
                     db.set_template(unquote(mstpl.group(1)), payload.get("template"))
                     self._send(200, b'{"ok":true}', "application/json; charset=utf-8")
                 except Exception as exc:
@@ -340,7 +374,7 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
                 self._send(404, b"not found", "text/plain")
                 return
             try:
-                payload = json.loads(body or b"{}")
+                payload = _json_body(body)
                 vote = int(payload.get("vote", 0))
             except Exception:
                 self._send(400, b"bad body", "text/plain")
@@ -354,7 +388,7 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
             from .streams import add
 
             try:
-                payload = json.loads(body or b"{}")
+                payload = _json_body(body)
                 url = str(payload.get("url") or "").strip()
                 title = str(payload.get("title") or "").strip()
                 platform = payload.get("platform") or None
@@ -419,22 +453,25 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
             from pipeline.util import ROOT, load_json
 
             try:
-                payload = json.loads(body or b"{}")
+                payload = _json_body(body)
                 if not isinstance(payload, dict):
                     raise ValueError("config precisa ser um objeto")
                 path = ROOT / "config.json"
                 current = load_json(path, {}) or {}
                 merged = _deep_merge(current, payload)
                 merged = _sanitize_config(merged)
+                text = json.dumps(merged, ensure_ascii=False, indent=2) + "\n"
                 if path.exists():
                     (ROOT / "config.json.bak").write_text(
                         path.read_text(encoding="utf-8"), encoding="utf-8"
                     )
-                path.write_text(
-                    json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8"
-                )
+                # grava em arquivo temporario e troca: nunca deixa config pela metade
+                tmp = ROOT / "config.json.tmp"
+                tmp.write_text(text, encoding="utf-8", newline="\n")
+                os.replace(tmp, path)
                 cfg.data = merged
             except Exception as exc:
+                log(f"[config] falha ao salvar: {exc}")
                 self._send(400, json.dumps({"ok": False, "error": str(exc)}).encode(),
                            "application/json; charset=utf-8")
                 return
@@ -444,7 +481,7 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
             from .template_preview import preview_png
 
             try:
-                payload = json.loads(body or b"{}")
+                payload = _json_body(body)
                 png = preview_png(
                     cfg,
                     str(payload.get("template") or "default"),
@@ -467,7 +504,7 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
             from .templates import save as save_template
 
             try:
-                payload = json.loads(body or b"{}")
+                payload = _json_body(body)
                 path = ROOT / "config.json"
                 current = load_json(path, {}) or {}
                 save_template(path, current, name, payload or {})

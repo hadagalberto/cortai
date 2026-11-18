@@ -11,6 +11,14 @@ models/
 config.json.bak
 work_*.log
 
+# assets do canal (upload pelo painel)
+branding/backgrounds/
+branding/art/
+branding/*.png
+branding/*.jpg
+branding/*.jpeg
+branding/*.webp
+
 # ferramentas
 .playwright-mcp/
 __pycache__/
