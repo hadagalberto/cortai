@@ -331,14 +331,14 @@ function buildForm(){
   // garante a aba do template mesmo sem secao declarada
   const hasTemplate = F.some(f=>f.id==='template');
   document.getElementById('forms').innerHTML = sectionHtml + (hasTemplate?'':templateHtml());
-  if(curTab==='template') setTimeout(renderHandles, 60);
+  if(curTab==='template') setTimeout(()=>{ loadLogoSize(); renderHandles(); }, 60);
 
   document.querySelectorAll('section.card').forEach(sec=>{
     sec.style.display = tabOf(sec.id)===curTab ? '' : 'none';
   });
 
   document.querySelectorAll('[data-tab]').forEach(a=>{
-    a.onclick=(ev)=>{ ev.preventDefault(); curTab=a.dataset.tab; buildForm(); if(curTab==='template') refreshPreview(); };
+    a.onclick=(ev)=>{ ev.preventDefault(); curTab=a.dataset.tab; buildForm(); if(curTab==='template'){ loadLogoSize(); refreshPreview(); } };
   });
 
   document.querySelectorAll('[data-p]').forEach(el=>{
@@ -440,6 +440,47 @@ function layoutOf(k){
   return S.branding.layout[k];
 }
 
+let logoPx=null;
+
+function loadLogoSize(){
+  const p=(S.branding||{}).logo;
+  if(!p){ logoPx=null; return; }
+  const img=new Image();
+  img.onload=()=>{ logoPx={w:img.naturalWidth,h:img.naturalHeight}; renderHandles(); };
+  img.onerror=()=>{ logoPx=null; };
+  img.src='/media/asset?p='+encodeURIComponent(p);
+}
+
+function logoRect(){
+  const b=S.branding||{};
+  if(!b.logo) return null;
+  const w=Number(b.logo_width||220), m=Number(b.logo_margin||40);
+  const pos=b.logo_position||'tr';
+  const h=logoPx?Math.round(w*logoPx.h/logoPx.w):w;
+  return {
+    x:(pos==='tl'||pos==='bl')?m:1080-w-m,
+    y:(pos==='tl'||pos==='tr')?m:1920-h-200,
+    w, h, pos
+  };
+}
+
+function logoShift(k,x,y,size){
+  const logo=logoRect();
+  if(!logo) return y;
+  const texto=k==='hook'
+    ? (document.getElementById('hook')||{}).value||''
+    : String(((S.branding||{})[k])||'');
+  const chars=Math.max(8,Math.floor((1080-112)/(size*0.56)));
+  const linhas=k==='hook' && texto.length>chars ? 2 : 1;
+  const largura=Math.max(linhas>1?chars:texto.length,8)*size*0.56;
+  const altura=linhas*size*1.15;
+  if(x+largura/2 < logo.x || x-largura/2 > logo.x+logo.w) return y;
+  if(y+altura/2 < logo.y || y-altura/2 > logo.y+logo.h) return y;
+  return logo.pos==='tl'||logo.pos==='tr'
+    ? logo.y+logo.h+18+altura/2
+    : logo.y-18-altura/2;
+}
+
 function renderHandles(){
   const layer=document.getElementById('layer');
   if(!layer) return;
@@ -451,11 +492,13 @@ function renderHandles(){
     const size=Number(e.size||40);
     const w=Math.max(size*4.2, size*(label.length*0.55));
     const h=size*1.7;
+    const x=e.x===undefined?540:e.x;
+    const y=logoShift(k,x,e.y===undefined?960:e.y,size);
     const box=document.createElement('div');
     box.className='handle';
     box.dataset.k=k;
-    box.style.left=((e.x===undefined?540:e.x)/1080*100)+'%';
-    box.style.top=((e.y===undefined?960:e.y)/1920*100)+'%';
+    box.style.left=(x/1080*100)+'%';
+    box.style.top=(y/1920*100)+'%';
     box.style.width=(w/1080*100)+'%';
     box.style.height=(h/1920*100)+'%';
     box.innerHTML='<span>'+label+'</span>';
