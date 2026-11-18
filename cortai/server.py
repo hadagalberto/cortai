@@ -119,6 +119,7 @@ LIMITS: dict[str, tuple[float, float]] = {
     "branding.logo_width": (60, 600),
     "publish.auto_min_score": (0, 10),
     "publish.max_per_day": (0, 100),
+    "publish.min_gap_minutes": (0, 1440),
     "maintenance.clip_retention_days": (1, 3650),
     "maintenance.keep_unpublished_days": (0, 3650),
     "maintenance.db_retention_days": (7, 3650),
@@ -365,7 +366,7 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
                     from .publish import publish_clip
 
                     try:
-                        state = publish_clip(db, cfg, int(mpub.group(1)))
+                        state = publish_clip(db, cfg, int(mpub.group(1)), force=True)
                         code = 202
                     except Exception as exc:
                         state = {"state": "error", "error": str(exc)}

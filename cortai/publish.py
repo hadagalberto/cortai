@@ -73,6 +73,15 @@ def should_auto_publish(cfg: dict[str, Any], score: float) -> tuple[bool, float]
     return float(score) >= limit, limit
 
 
+def min_gap(cfg: dict[str, Any]) -> float:
+    """Intervalo minimo entre posts, em segundos (0 = publica tudo junto)."""
+    pub = _data(cfg).get("publish") or {}
+    try:
+        return max(0.0, float(pub.get("min_gap_minutes") or 0.0)) * 60
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def next_slot(cfg: dict[str, Any], now: float | None = None) -> float | None:
     """Proximo horario de pico configurado. None = publicar na hora."""
     cfg = _data(cfg)
@@ -140,6 +149,12 @@ def enqueue(
 
     pub = _data(cfg).get("publish") or {}
     at = next_slot(cfg)
+    gap = min_gap(cfg)
+    if at and gap:
+        # nao empilha dois posts no mesmo horario: empurra para o proximo vao livre
+        ocupados = db.pending_publish_times()
+        while any(abs(at - t) < gap for t in ocupados):
+            at += gap
     job_id = db.enqueue_publish(clip_id, privacy or pub.get("privacy"), at)
     state = {
         "state": "queued",
@@ -161,12 +176,13 @@ def _iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
-def run_queue(db: DB, cfg: dict[str, Any], limit: int = 3) -> list[dict[str, Any]]:
+def run_queue(db: DB, cfg: dict[str, Any], limit: int = 3, force: bool = False) -> list[dict[str, Any]]:
     """Processa jobs vencidos. Chamado pelo supervisor e pelo CLI."""
     cfg = _data(cfg)
     pub = cfg.get("publish") or {}
     max_attempts = int(pub.get("max_attempts") or 5)
     retry_base = float(pub.get("retry_minutes") or 5)
+    gap = 0.0 if force else min_gap(cfg)
     results: list[dict[str, Any]] = []
 
     with _lock:
@@ -183,10 +199,20 @@ def run_queue(db: DB, cfg: dict[str, Any], limit: int = 3) -> list[dict[str, Any
             pause_until(reset)
             db.finish_job(job["id"], "queued", f"limite proprio de {daily_cap}/dia",
                           next_try=reset, count_attempt=False)
-            _mark(db, job["clip_id"], {"state": "queued", "error": f"limite de {daily_cap}/dia",
+            _mark(db, job["clip_id"], {"state": "queued", "waiting": "quota",
+                                       "error": f"limite de {daily_cap}/dia",
                                        "retry_at": reset, "at": time.time()})
             log(f"[publish] {daily_cap} uploads hoje; volta em {datetime.fromtimestamp(reset):%d/%m %H:%M}")
             continue
+        agendado = bool(job["publish_at"] and job["publish_at"] > time.time() + 90)
+        if gap and not agendado:
+            ultimo = db.last_upload_at()
+            if ultimo and time.time() < ultimo + gap:
+                alvo = ultimo + gap
+                db.finish_job(job["id"], "queued", None, next_try=alvo, count_attempt=False)
+                _mark(db, job["clip_id"], {"state": "queued", "waiting": "gap",
+                                           "retry_at": alvo, "at": time.time()})
+                continue
         if not db.claim_job(job["id"]):
             continue
         row = db.clip(job["clip_id"])
@@ -235,7 +261,8 @@ def run_queue(db: DB, cfg: dict[str, Any], limit: int = 3) -> list[dict[str, Any
                 pause_until(reset)
                 db.finish_job(job["id"], "queued", msg, next_try=reset, count_attempt=False)
                 _mark(db, row["id"], {
-                    "state": "queued", "error": msg, "retry_at": reset, "at": time.time(),
+                    "state": "queued", "waiting": "quota", "error": msg,
+                    "retry_at": reset, "at": time.time(),
                 })
                 log(
                     "[publish] limite do YouTube atingido; fila pausada ate "
@@ -263,6 +290,9 @@ def run_queue(db: DB, cfg: dict[str, Any], limit: int = 3) -> list[dict[str, Any
         _mark(db, row["id"], state, status="published")
         log(f"[publish] ok: {result['url']}")
         results.append({"clip": row["id"], "ok": True, "url": result["url"]})
+        if gap and not agendado:
+            # um post por ciclo: o proximo espera o intervalo
+            break
 
     return results
 
@@ -270,14 +300,14 @@ def run_queue(db: DB, cfg: dict[str, Any], limit: int = 3) -> list[dict[str, Any
 # -- compatibilidade --------------------------------------------------
 def publish_clip(
     db: DB, cfg: dict[str, Any], clip_id: int, privacy: str | None = None,
-    background: bool = True,
+    background: bool = True, force: bool = False,
 ) -> dict[str, Any]:
     """Enfileira; com background=False processa na hora (CLI)."""
     state = enqueue(db, cfg, clip_id, privacy)
     if not background:
         with _lock:
             pass
-        run_queue(db, cfg, limit=1)
+        run_queue(db, cfg, limit=1, force=force)
         row = db.clip(clip_id)
         if row and row["published"]:
             import json as _json

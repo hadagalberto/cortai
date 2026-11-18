@@ -328,6 +328,12 @@ Publicar não é imediato: vai para uma fila e o supervisor processa a cada 30s.
 - `schedule_hours` vazio = publica assim que sair. Com `[19, 20]`, o upload é agendado
   para a próxima 19h ou 20h (usa `publishAt` do YouTube, que exige o vídeo `private`
   até a hora).
+- `min_gap_minutes` (padrão `90`) **diversifica os horários**: depois de um upload, o
+  próximo só sai quando o intervalo passa. Com vários clipes na fila, eles saem um a
+  cada 90 minutos em vez de todos no mesmo minuto. Com `schedule_hours` definido, os
+  horários são empilhados a partir do primeiro slot com esse espaçamento.
+- Publicar manualmente (botão no painel ou `cortai.py publish <id>`) **ignora** o
+  intervalo: você pediu aquele clipe agora.
 - Se o upload falhar (rede, token expirado), ele volta para a fila com espera crescente:
   5, 10, 20, 40, 80 minutos, até `max_attempts`.
 - Depois disso o clipe fica em `error` com o motivo e o botão **reenviar** no painel.

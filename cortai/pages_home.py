@@ -217,6 +217,7 @@ function publishControl(c){
   if(p.state==='uploading'){const pct=p.progress?Math.round(p.progress*100):0;return '<span class="pub up">Enviando '+pct+'%</span>';}
   if(p.state==='queued'&&p.retry_at){
     const quando=new Date(p.retry_at*1000).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    if(p.waiting==='gap') return '<span class="pub up" title="intervalo entre posts">Próximo post · '+quando+'</span>';
     return '<span class="pub up" title="'+esc(p.error||'')+'">Limite do YouTube · volta '+quando+'</span>';
   }
   if(p.state==='queued') return '<span class="pub up">'+(p.scheduled_for?'Agendado':'Na fila')+'</span>';

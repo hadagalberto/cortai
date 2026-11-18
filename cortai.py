@@ -373,7 +373,12 @@ def cmd_queue(cfg: Config, args: argparse.Namespace) -> int:
 
     db = db_for(cfg)
     if args.drain:
-        results = run_queue(db, cfg, limit=args.limit)
+        # drenar e "publica agora": tambem antecipa o que estava esperando o intervalo
+        db.conn().execute(
+            "UPDATE publish_queue SET next_try=? WHERE state='queued' AND (error IS NULL OR error='')",
+            (time.time(),),
+        )
+        results = run_queue(db, cfg, limit=args.limit, force=True)
         print(_json.dumps(results, indent=2, ensure_ascii=False))
         return 0
     rows = db.conn().execute(
@@ -410,7 +415,7 @@ def cmd_publish(cfg: Config, args: argparse.Namespace) -> int:
 
     db = db_for(cfg)
     try:
-        state = publish_clip(db, cfg.data, args.clip, privacy=args.privacy, background=False)
+        state = publish_clip(db, cfg.data, args.clip, privacy=args.privacy, background=False, force=True)
     except Exception as exc:
         print(f"erro: {exc}")
         return 1

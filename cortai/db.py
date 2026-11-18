@@ -261,6 +261,24 @@ class DB:
         ).fetchone()
         return int(row["n"] or 0)
 
+    def last_upload_at(self) -> float | None:
+        """Quando saiu o ultimo upload concluido (para espacar os posts)."""
+        try:
+            row = self.conn().execute(
+                "SELECT MAX(json_extract(published,'$.at')) t FROM clips"
+                " WHERE json_extract(published,'$.state')='done'"
+            ).fetchone()
+            return float(row["t"]) if row and row["t"] else None
+        except Exception:
+            return None
+
+    def pending_publish_times(self) -> list[float]:
+        rows = self.conn().execute(
+            "SELECT publish_at FROM publish_queue"
+            " WHERE state IN ('queued','uploading') AND publish_at IS NOT NULL"
+        )
+        return [float(r["publish_at"]) for r in rows]
+
     # -- dedupe por tempo ----------------------------------------------
     def overlapping_clip(self, stream_id: int, start_ts: float, end_ts: float) -> int | None:
         """Id de um clipe existente que cobre boa parte deste intervalo."""

@@ -160,7 +160,8 @@
     "schedule_hours": [],
     "max_attempts": 5,
     "retry_minutes": 5,
-    "max_per_day": 0
+    "max_per_day": 0,
+    "min_gap_minutes": 90
   },
   "maintenance": {
     "enabled": true,
