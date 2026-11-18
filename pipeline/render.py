@@ -80,20 +80,111 @@ def _subst(text: str, variables: dict[str, Any] | None) -> str:
     return out
 
 
+_logo_cache: dict[str, tuple[int, int] | None] = {}
+
+
+def _image_size(path: str | None) -> tuple[int, int] | None:
+    """Dimensoes reais da imagem do logo (o filtro escala por largura)."""
+    if not path:
+        return None
+    chave = str(path)
+    if chave in _logo_cache:
+        return _logo_cache[chave]
+    from .util import ROOT
+
+    alvo = Path(path)
+    if not alvo.is_absolute():
+        alvo = ROOT / alvo
+    tamanho: tuple[int, int] | None = None
+    if alvo.is_file():
+        try:
+            import subprocess
+
+            saida = subprocess.run(
+                [
+                    find_exe("ffprobe"), "-v", "error", "-select_streams", "v:0",
+                    "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x",
+                    str(alvo),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            largura, altura = saida.stdout.strip().split("x")[:2]
+            tamanho = (int(largura), int(altura))
+        except Exception:
+            tamanho = None
+    _logo_cache[chave] = tamanho
+    return tamanho
+
+
+def _logo_rect(brand: dict[str, Any] | None, w: int, h: int) -> dict[str, Any] | None:
+    """Caixa do logo, igual ao que o filtro do ffmpeg desenha."""
+    logo = (brand or {}).get("logo")
+    if not logo:
+        return None
+    largura = int((brand or {}).get("logo_width") or 220)
+    margem = int((brand or {}).get("logo_margin") or 40)
+    pos = str((brand or {}).get("logo_position") or "tr")
+    tamanho = _image_size(logo)
+    altura = int(largura * (tamanho[1] / tamanho[0])) if tamanho and tamanho[0] else largura
+    x = margem if pos in ("tl", "bl") else w - largura - margem
+    y = margem if pos in ("tl", "tr") else h - altura - 200
+    return {"x": x, "y": y, "w": largura, "h": altura, "pos": pos}
+
+
+def _clear_logo(
+    x: int,
+    y: int,
+    size: int,
+    linhas: list[str],
+    logo: dict[str, Any] | None,
+    h: int,
+) -> int:
+    """Empurra o texto para fora do logo quando as duas areas se cruzam.
+
+    Antes o gancho era sempre centrado em y fixo e passava por baixo da arte no
+    canto: a primeira linha era cortada. Agora ele desce (ou sobe) o minimo
+    necessario para nao encostar.
+    """
+    if not logo:
+        return y
+    mais_larga = max((len(linha) for linha in linhas), default=0)
+    largura = mais_larga * size * 0.56
+    altura = max(1, len(linhas)) * size * 1.15
+    topo = y - altura / 2
+    base = y + altura / 2
+
+    if x + largura / 2 < logo["x"] or x - largura / 2 > logo["x"] + logo["w"]:
+        return y
+    if base < logo["y"] or topo > logo["y"] + logo["h"]:
+        return y
+
+    if logo["pos"] in ("tl", "tr"):
+        novo = logo["y"] + logo["h"] + 18 + altura / 2
+    else:
+        novo = logo["y"] - 18 - altura / 2
+    return int(max(altura / 2 + 16, min(h - altura / 2 - 16, novo)))
+
+
 def _overlay_event(
     start: float,
     end: float,
     text: str,
     cfg_layout: dict[str, Any],
     layer: int = 0,
+    logo: dict[str, Any] | None = None,
+    h: int = 1920,
 ) -> str:
     x = int(cfg_layout.get("x", 540))
     y = int(cfg_layout.get("y", 200))
     size = int(cfg_layout.get("size", 60))
-    color = _ass_color(cfg_layout.get("color"), "0xFFFFFF")
+    linhas = str(text).split("\n")
+    y = _clear_logo(x, y, size, linhas, logo, h)
+    cor = _ass_color(cfg_layout.get("color"), "0xFFFFFF")
     an = {"center": 5, "top": 8, "bottom": 2}.get(str(cfg_layout.get("align", "center")), 5)
-    body = "\\N".join(_ass_escape(line) for line in str(text).split("\n"))
-    tags = "{\\an" + str(an) + "\\pos(" + str(x) + "," + str(y) + ")\\fs" + str(size) + "\\c" + color + "}"
+    body = "\\N".join(_ass_escape(line) for line in linhas)
+    tags = "{\\an" + str(an) + "\\pos(" + str(x) + "," + str(y) + ")\\fs" + str(size) + "\\c" + cor + "}"
     return f"Dialogue: {layer},{_ass_time(start)},{_ass_time(end)},Sub,,0,0,0,,{tags}{body}"
 
 
@@ -135,6 +226,7 @@ def build_ass(
             "max_width": w - 112,
         },
     )
+    logo = _logo_rect(brand, w, h)
     if hook and cfg.get("hook_caption", True) and hk.get("enabled", True):
         text = hook.upper().strip()
         usable = int(hk.get("max_width") or (w - 112))
@@ -158,7 +250,8 @@ def build_ass(
 
         if lines:
             body = "\\N".join(_ass_escape(line) for line in lines)
-            x, y = int(hk.get("x", w // 2)), int(hk.get("y", 200))
+            x = int(hk.get("x", w // 2))
+            y = _clear_logo(x, int(hk.get("y", 200)), int(chosen), lines, logo, h)
             an = {"center": 5, "top": 8, "bottom": 2}.get(str(hk.get("align", "center")), 5)
             tags = (
                 "{\\an" + str(an) + "\\pos(" + str(x) + "," + str(y) + ")\\fs" + str(chosen)
@@ -194,17 +287,17 @@ def build_ass(
     hd = _layout(brand, "handle", {"x": w // 2, "y": h - 230, "size": 46, "color": "0xFFFFFF", "enabled": True})
     handle_text = _subst((brand or {}).get("handle") or "", vars_all).strip()
     if handle_text and hd.get("enabled", True):
-        out.append(_overlay_event(0.05, clip_len, handle_text, hd))
+        out.append(_overlay_event(0.05, clip_len, handle_text, hd, logo=logo, h=h))
 
     ct = _layout(brand, "cta", {"x": w // 2, "y": h - 160, "size": 40, "color": accent, "enabled": True})
     cta_text = _subst((brand or {}).get("cta") or "", vars_all).strip()
     if cta_text and ct.get("enabled", True):
-        out.append(_overlay_event(0.05, clip_len, cta_text.upper(), ct))
+        out.append(_overlay_event(0.05, clip_len, cta_text.upper(), ct, logo=logo, h=h))
 
     ex = _layout(brand, "extra", {"x": w // 2, "y": h - 320, "size": 40, "color": "0xFFFFFF", "enabled": False, "text": ""})
     extra_text = _subst(str(ex.get("text") or ""), vars_all).strip()
     if extra_text and ex.get("enabled"):
-        out.append(_overlay_event(0.05, clip_len, extra_text, ex))
+        out.append(_overlay_event(0.05, clip_len, extra_text, ex, logo=logo, h=h))
 
     return "\n".join(out) + "\n"
 
