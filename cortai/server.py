@@ -118,6 +118,7 @@ LIMITS: dict[str, tuple[float, float]] = {
     "render.pip_offset_y": (0, 1200),
     "branding.logo_width": (60, 600),
     "publish.auto_min_score": (0, 10),
+    "publish.max_per_day": (0, 100),
     "maintenance.clip_retention_days": (1, 3650),
     "maintenance.keep_unpublished_days": (0, 3650),
     "maintenance.db_retention_days": (7, 3650),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 import threading
 import time
 from datetime import datetime, timezone
@@ -14,12 +15,52 @@ from .db import DB
 from . import publish_youtube as yt
 
 _lock = threading.Lock()
+_paused_until: float = 0.0
 
 
 # -- utilidades -------------------------------------------------------
 def _data(cfg: Any) -> dict[str, Any]:
     """Aceita Config ou dict — o resto do sistema passa os dois."""
     return getattr(cfg, "data", cfg) or {}
+
+
+def is_quota_limit(msg: str) -> bool:
+    """Limite diario do YouTube: nao e falha do clipe, volta sozinho depois."""
+    m = (msg or "").lower()
+    return "limite de uploads do canal" in m or "cota diaria do youtube" in m
+
+
+def quota_reset_at(now: float | None = None) -> float:
+    """Meia-noite do Pacifico (onde a cota do YouTube zera), em horario local."""
+    now = now or time.time()
+    t = time.gmtime(now)
+    base = calendar.timegm((t.tm_year, t.tm_mon, t.tm_mday, 8, 10, 0, 0, 0, 0))
+    return base if base > now else base + 86400
+
+
+def paused_until() -> float:
+    return _paused_until
+
+
+def pause_until(ts: float) -> None:
+    global _paused_until
+    _paused_until = max(_paused_until, ts)
+
+
+def uploaded_today(db: DB, now: float | None = None) -> int:
+    """Quantos clipes foram publicados de meia-noite local pra ca."""
+    try:
+        t = time.localtime(now or time.time())
+        start = time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1))
+        row = db.conn().execute(
+            "SELECT COUNT(*) c FROM clips WHERE published IS NOT NULL"
+            " AND json_extract(published,'$.state')='done'"
+            " AND json_extract(published,'$.at') >= ?",
+            (start,),
+        ).fetchone()
+        return int(row["c"] or 0)
+    except Exception:
+        return 0
 
 
 def should_auto_publish(cfg: dict[str, Any], score: float) -> tuple[bool, float]:
@@ -131,7 +172,21 @@ def run_queue(db: DB, cfg: dict[str, Any], limit: int = 3) -> list[dict[str, Any
     with _lock:
         jobs = db.due_publish_jobs(limit)
 
+    daily_cap = int(pub.get("max_per_day") or 0)
     for job in jobs:
+        if time.time() < _paused_until:
+            db.finish_job(job["id"], "queued", "pausado: limite do YouTube",
+                          next_try=_paused_until, count_attempt=False)
+            continue
+        if daily_cap > 0 and uploaded_today(db) >= daily_cap:
+            reset = quota_reset_at()
+            pause_until(reset)
+            db.finish_job(job["id"], "queued", f"limite proprio de {daily_cap}/dia",
+                          next_try=reset, count_attempt=False)
+            _mark(db, job["clip_id"], {"state": "queued", "error": f"limite de {daily_cap}/dia",
+                                       "retry_at": reset, "at": time.time()})
+            log(f"[publish] {daily_cap} uploads hoje; volta em {datetime.fromtimestamp(reset):%d/%m %H:%M}")
+            continue
         if not db.claim_job(job["id"]):
             continue
         row = db.clip(job["clip_id"])
@@ -174,6 +229,20 @@ def run_queue(db: DB, cfg: dict[str, Any], limit: int = 3) -> list[dict[str, Any
         except Exception as exc:
             attempts = int(job["attempts"]) + 1
             msg = str(exc)
+            if is_quota_limit(msg):
+                # o teto e do YouTube, nao do clipe: para a fila inteira e volta no reset
+                reset = quota_reset_at()
+                pause_until(reset)
+                db.finish_job(job["id"], "queued", msg, next_try=reset, count_attempt=False)
+                _mark(db, row["id"], {
+                    "state": "queued", "error": msg, "retry_at": reset, "at": time.time(),
+                })
+                log(
+                    "[publish] limite do YouTube atingido; fila pausada ate "
+                    f"{datetime.fromtimestamp(reset):%d/%m %H:%M}"
+                )
+                results.append({"clip": row["id"], "ok": False, "error": msg})
+                continue
             if attempts >= max_attempts:
                 db.finish_job(job["id"], "failed", msg)
                 _mark(db, row["id"], {"state": "error", "error": msg, "at": time.time()})

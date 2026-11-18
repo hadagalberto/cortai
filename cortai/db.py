@@ -237,15 +237,21 @@ class DB:
         return cur.rowcount > 0
 
     def finish_job(self, job_id: int, state: str, error: str | None = None,
-                   next_try: float | None = None) -> None:
+                   next_try: float | None = None, count_attempt: bool = True) -> None:
         if next_try is None:
             self.conn().execute(
                 "UPDATE publish_queue SET state=?, error=? WHERE id=?", (state, error, job_id)
             )
-        else:
+        elif count_attempt:
             self.conn().execute(
                 "UPDATE publish_queue SET state=?, error=?, attempts=attempts+1, next_try=?"
                 " WHERE id=?",
+                (state, error, next_try, job_id),
+            )
+        else:
+            # limite do YouTube nao e falha do clipe: reagenda sem gastar tentativa
+            self.conn().execute(
+                "UPDATE publish_queue SET state=?, error=?, next_try=? WHERE id=?",
                 (state, error, next_try, job_id),
             )
 

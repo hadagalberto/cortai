@@ -328,9 +328,31 @@ Publicar não é imediato: vai para uma fila e o supervisor processa a cada 30s.
 - `schedule_hours` vazio = publica assim que sair. Com `[19, 20]`, o upload é agendado
   para a próxima 19h ou 20h (usa `publishAt` do YouTube, que exige o vídeo `private`
   até a hora).
-- Se o upload falhar (rede, cota, token expirado), ele volta para a fila com espera
-  crescente: 5, 10, 20, 40, 80 minutos, até `max_attempts`.
+- Se o upload falhar (rede, token expirado), ele volta para a fila com espera crescente:
+  5, 10, 20, 40, 80 minutos, até `max_attempts`.
 - Depois disso o clipe fica em `error` com o motivo e o botão **reenviar** no painel.
+
+### Limite do YouTube (por que para de publicar)
+
+O YouTube impõe **dois tetos** diferentes, e nenhum é configurável por nós:
+
+| teto | erro | quando zera |
+|---|---|---|
+| cota de API do projeto (10.000 unidades/dia, 1.600 por upload ≈ 6 vídeos) | `quotaExceeded` | meia-noite do Pacífico |
+| quantidade de uploads do canal por dia (varia por conta, é menor em canal novo) | `uploadLimitExceeded` | meia-noite do Pacífico |
+
+Quando qualquer um dos dois aparece, o cortai **não trata como falha do clipe**: a fila
+inteira pausa, o job continua `queued`, nenhuma tentativa é gasta, e tudo volta sozinho
+depois do reset. No painel o clipe mostra `Limite do YouTube · volta 19/11 05:10`.
+
+Para não bater na parede todo dia, dá para fixar seu próprio teto:
+
+```json
+"publish": { "max_per_day": 6 }
+```
+
+`0` (padrão) desliga o limite próprio. O contador é de clipes publicados com sucesso
+desde a meia-noite local.
 
 ```powershell
 python cortai.py queue            # o que está na fila

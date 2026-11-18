@@ -201,6 +201,7 @@ function buildSchema(){
      {p:'publish.schedule_hours',l:'horários de postagem',h:'ex: 19,20 — vazio publica na hora',t:'list'},
      {p:'publish.max_attempts',l:'tentativas em caso de erro',t:'num',min:1,max:20},
      {p:'publish.retry_minutes',l:'espera entre tentativas',u:'min',t:'num',min:1,max:240},
+     {p:'publish.max_per_day',l:'máximo de uploads por dia',h:'0 = sem limite próprio; o YouTube também impõe um teto por canal',t:'num',min:0,max:100},
      {p:'publish.category_id',l:'categoria do YouTube',h:'20 = Gaming',t:'text'},
      {p:'publish.description_footer',l:'rodapé da descrição',t:'text'}]);
 

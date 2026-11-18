@@ -215,6 +215,10 @@ function publishControl(c){
   const p=c.published||{};
   if(p.state==='done') return '<a class="pub done" href="'+esc(p.url||'#')+'" target="_blank" rel="noopener">No YouTube ✓</a>';
   if(p.state==='uploading'){const pct=p.progress?Math.round(p.progress*100):0;return '<span class="pub up">Enviando '+pct+'%</span>';}
+  if(p.state==='queued'&&p.retry_at){
+    const quando=new Date(p.retry_at*1000).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return '<span class="pub up" title="'+esc(p.error||'')+'">Limite do YouTube · volta '+quando+'</span>';
+  }
   if(p.state==='queued') return '<span class="pub up">'+(p.scheduled_for?'Agendado':'Na fila')+'</span>';
   if(p.state==='error') return '<button class="pub err" onclick="publishClip('+c.id+')" title="'+esc(p.error||'')+'">Reenviar</button>';
   if(!window.CAN_PUBLISH) return '';
