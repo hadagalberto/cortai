@@ -84,6 +84,7 @@ def preview_png(
     layout: str = "pip",
     render_override: dict[str, Any] | None = None,
     branding_override: dict[str, Any] | None = None,
+    variables: dict[str, Any] | None = None,
 ) -> bytes | None:
     source, cached_face = _sample_source(cfg)
     base_render, base_brand = resolve(cfg, template)
@@ -118,6 +119,7 @@ def preview_png(
             layout=layout if layout in ("pip", "face", "game") else "pip",
             face=face if (face and layout in ("pip", "face")) else None,
             focus_x=0.5,
+            variables=variables or {"streamer": "canal", "date": "hoje"},
         )
     except Exception as exc:
         log(f"[preview] falhou: {exc}")

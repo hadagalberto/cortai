@@ -179,6 +179,43 @@
     "cta": "SEGUE PRA MAIS",
     "accent": "0xFFD400",
     "handle_offset": 240,
-    "cta_offset": 165
+    "cta_offset": 165,
+    "layout": {
+      "hook": {
+        "x": 540,
+        "y": 220,
+        "size": 92,
+        "color": "0xFFD400",
+        "align": "center"
+      },
+      "handle": {
+        "x": 540,
+        "y": 1690,
+        "size": 46,
+        "color": "0xFFFFFF"
+      },
+      "cta": {
+        "x": 540,
+        "y": 1760,
+        "size": 40,
+        "color": "0xFFD400"
+      },
+      "extra": {
+        "x": 540,
+        "y": 1560,
+        "size": 38,
+        "color": "0xFFFFFF",
+        "text": "",
+        "enabled": false
+      }
+    },
+    "background": {
+      "mode": "blur",
+      "images": []
+    },
+    "art": {
+      "image": "",
+      "opacity": 1.0
+    }
   }
 }

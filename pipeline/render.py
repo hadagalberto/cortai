@@ -61,16 +61,54 @@ def _wrap(text: str, max_chars: int, max_lines: int = 2) -> list[str]:
     return lines
 
 
+def _ass_color(value: str | None, fallback: str = "0xFFFFFF") -> str:
+    raw = str(value or fallback).replace("0x", "").replace("#", "").strip()
+    raw = raw[-6:].rjust(6, "0")
+    r, g, b = raw[0:2], raw[2:4], raw[4:6]
+    return ("&H00" + b + g + r).upper()
+
+
+def _layout(brand: dict[str, Any] | None, key: str, defaults: dict[str, Any]) -> dict[str, Any]:
+    node = ((brand or {}).get("layout") or {}).get(key) or {}
+    return {**defaults, **node}
+
+
+def _subst(text: str, variables: dict[str, Any] | None) -> str:
+    out = str(text or "")
+    for name, value in (variables or {}).items():
+        out = out.replace("{" + name + "}", str(value))
+    return out
+
+
+def _overlay_event(
+    start: float,
+    end: float,
+    text: str,
+    cfg_layout: dict[str, Any],
+    layer: int = 0,
+) -> str:
+    x = int(cfg_layout.get("x", 540))
+    y = int(cfg_layout.get("y", 200))
+    size = int(cfg_layout.get("size", 60))
+    color = _ass_color(cfg_layout.get("color"), "0xFFFFFF")
+    an = {"center": 5, "top": 8, "bottom": 2}.get(str(cfg_layout.get("align", "center")), 5)
+    body = "\\N".join(_ass_escape(line) for line in str(text).split("\n"))
+    tags = "{\\an" + str(an) + "\\pos(" + str(x) + "," + str(y) + ")\\fs" + str(size) + "\\c" + color + "}"
+    return f"Dialogue: {layer},{_ass_time(start)},{_ass_time(end)},Sub,,0,0,0,,{tags}{body}"
+
+
 def build_ass(
     transcript: dict[str, Any] | None,
     hook: str,
     clip_len: float,
     cfg: dict[str, Any],
+    brand: dict[str, Any] | None = None,
+    variables: dict[str, Any] | None = None,
 ) -> str:
     w, h = int(cfg["width"]), int(cfg["height"])
     sub_size = int(cfg.get("sub_size") or 76)
-    # ~0.55 * fontsize px por caractere
     max_chars = max(12, int((w - 128) / (sub_size * 0.55)))
+    accent = (brand or {}).get("accent") or "0xFFD400"
 
     out = [
         ASS_HEADER.format(
@@ -85,36 +123,49 @@ def build_ass(
         )
     ]
 
-    if hook and cfg.get("hook_caption", True):
+    hk = _layout(
+        brand,
+        "hook",
+        {
+            "x": w // 2,
+            "y": 200,
+            "size": int(cfg.get("hook_size") or 92),
+            "color": accent,
+            "align": "center",
+            "max_width": w - 112,
+        },
+    )
+    if hook and cfg.get("hook_caption", True) and hk.get("enabled", True):
         text = hook.upper().strip()
-        margin = 56
-        usable = w - 2 * margin
-        hook_size = int(cfg.get("hook_size") or 92)
+        usable = int(hk.get("max_width") or (w - 112))
+        base = int(hk.get("size") or 92)
         chosen = lines = None
 
-        # 1) tenta 1 linha sem encolher demais (mantem impacto)
-        for size in range(hook_size, int(hook_size * 0.8), -4):
-            max_chars = max(8, int(usable / (size * 0.56)))
-            candidate = _wrap(text, max_chars, 1)
+        for size in range(base, int(base * 0.8), -4):
+            chars = max(8, int(usable / (size * 0.56)))
+            candidate = _wrap(text, chars, 1)
             if " ".join(candidate) == text:
                 chosen, lines = size, candidate
                 break
 
-        # 2) senao, 2 linhas no maior tamanho que couber inteiro
         if lines is None:
-            for size in range(hook_size, 38, -4):
-                max_chars = max(8, int(usable / (size * 0.56)))
-                candidate = _wrap(text, max_chars, 2)
+            for size in range(base, 38, -4):
+                chars = max(8, int(usable / (size * 0.56)))
+                candidate = _wrap(text, chars, 2)
                 if sum(len(line) for line in candidate) >= len(text) - 1:
                     chosen, lines = size, candidate
                     break
 
         if lines:
             body = "\\N".join(_ass_escape(line) for line in lines)
+            x, y = int(hk.get("x", w // 2)), int(hk.get("y", 200))
+            an = {"center": 5, "top": 8, "bottom": 2}.get(str(hk.get("align", "center")), 5)
+            tags = (
+                "{\\an" + str(an) + "\\pos(" + str(x) + "," + str(y) + ")\\fs" + str(chosen)
+                + "\\c" + _ass_color(hk.get("color"), accent) + "}"
+            )
             out.append(
-                "Dialogue: 0,{},{},Hook,,0,0,0,,{{\\fs{}}}{}".format(
-                    _ass_time(0.05), _ass_time(min(6.0, clip_len)), chosen, body
-                )
+                f"Dialogue: 0,{_ass_time(0.05)},{_ass_time(min(6.0, clip_len))},Hook,,0,0,0,,{tags}{body}"
             )
 
     if transcript:
@@ -137,8 +188,25 @@ def build_ass(
                 out.append(
                     f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Sub,,0,0,0,,{body}"
                 )
-    return "\n".join(out) + "\n"
 
+    vars_all = {"handle": (brand or {}).get("handle", ""), **(variables or {})}
+
+    hd = _layout(brand, "handle", {"x": w // 2, "y": h - 230, "size": 46, "color": "0xFFFFFF", "enabled": True})
+    handle_text = _subst((brand or {}).get("handle") or "", vars_all).strip()
+    if handle_text and hd.get("enabled", True):
+        out.append(_overlay_event(0.05, clip_len, handle_text, hd))
+
+    ct = _layout(brand, "cta", {"x": w // 2, "y": h - 160, "size": 40, "color": accent, "enabled": True})
+    cta_text = _subst((brand or {}).get("cta") or "", vars_all).strip()
+    if cta_text and ct.get("enabled", True):
+        out.append(_overlay_event(0.05, clip_len, cta_text.upper(), ct))
+
+    ex = _layout(brand, "extra", {"x": w // 2, "y": h - 320, "size": 40, "color": "0xFFFFFF", "enabled": False, "text": ""})
+    extra_text = _subst(str(ex.get("text") or ""), vars_all).strip()
+    if extra_text and ex.get("enabled"):
+        out.append(_overlay_event(0.05, clip_len, extra_text, ex))
+
+    return "\n".join(out) + "\n"
 
 def _flatten_words(transcript: dict[str, Any]) -> list[dict[str, Any]]:
     words: list[dict[str, Any]] = []
@@ -221,7 +289,7 @@ def _fps_prefix(cfg: dict[str, Any]) -> str:
     return f"fps={fps}," if fps > 0 else ""
 
 
-def _game_chain(cfg: dict[str, Any], src: str = "0:v") -> str:
+def _game_chain(cfg: dict[str, Any], src: str = "0:v", bg_index: int | None = None) -> str:
     w, h = int(cfg["width"]), int(cfg["height"])
     mode = cfg.get("mode", "pad_blur")
     pre = _fps_prefix(cfg) if src == "0:v" else ""
@@ -233,6 +301,13 @@ def _game_chain(cfg: dict[str, Any], src: str = "0:v") -> str:
     if mode != "pad_blur":
         raise ValueError(f"render.mode invalido: {mode}")
     sigma = int(cfg.get("blur_sigma") or 22)
+    if bg_index is not None:
+        return (
+            f"[{src}]{pre}scale={w}:{h}:force_original_aspect_ratio=decrease[fg];"
+            f"[{bg_index}:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
+            f"crop={w}:{h},setsar=1[bg];"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v0]"
+        )
     return (
         f"[{src}]{pre}split=2[a][b];"
         f"[a]scale={w}:{h}:force_original_aspect_ratio=increase,"
@@ -276,7 +351,7 @@ def _face_chain(cfg: dict[str, Any], face: dict[str, Any]) -> str:
     )
 
 
-def _pip_chain(cfg: dict[str, Any], face: dict[str, Any]) -> str:
+def _pip_chain(cfg: dict[str, Any], face: dict[str, Any], bg_index: int | None = None) -> str:
     """Gameplay em tela cheia + facecam ampliada num canto.
 
     A facecam original do gameplay e desfocada para nao aparecer duplicada.
@@ -299,7 +374,7 @@ def _pip_chain(cfg: dict[str, Any], face: dict[str, Any]) -> str:
     return (
         f"[0:v]{_fps_prefix(cfg)}crop={fside}:{fside}:{fx}:{fy},gblur=sigma={blur}[bp];"
         f"[0:v][bp]overlay={fx}:{fy}[gb];"
-        f"{_game_chain(cfg, 'gb').replace('[v0]', '[g]')};"
+        f"{_game_chain(cfg, 'gb', bg_index).replace('[v0]', '[g]')};"
         f"[0:v]{_fps_prefix(cfg)}{_face_crop(face)},scale={pip}:{pip}:flags=lanczos,"
         f"pad={pip + 2 * border}:{pip + 2 * border}:{border}:{border}:color=white@1[fc];"
         f"[g][fc]overlay={px}:{py},setsar=1[v0]"
@@ -307,13 +382,85 @@ def _pip_chain(cfg: dict[str, Any], face: dict[str, Any]) -> str:
 
 
 def _video_chain(
-    cfg: dict[str, Any], layout: str = "game", face: dict[str, Any] | None = None
+    cfg: dict[str, Any],
+    layout: str = "game",
+    face: dict[str, Any] | None = None,
+    bg_index: int | None = None,
 ) -> str:
     if face and layout == "face":
         return _face_chain(cfg, face)
     if face and layout == "pip":
-        return _pip_chain(cfg, face)
-    return _game_chain(cfg)
+        return _pip_chain(cfg, face, bg_index)
+    return _game_chain(cfg, bg_index=bg_index)
+
+
+def _brand_inputs(
+    branding: dict[str, Any] | None,
+) -> tuple[list[str], dict[str, int | None]]:
+    """Monta os -i extras (fundo, arte, logo) e devolve os indices deles."""
+    from cortai.assets import pick_background
+    from cortai.branding import art_path
+
+    extra: list[str] = []
+    idx: dict[str, int | None] = {"bg": None, "art": None, "logo": None}
+    n = 1
+
+    bg = pick_background(branding or {})
+    if bg:
+        extra += ["-i", str(bg)]
+        idx["bg"] = n
+        n += 1
+
+    art = art_path(branding)
+    if art:
+        extra += ["-i", str(art)]
+        idx["art"] = n
+        n += 1
+
+    logo = (branding or {}).get("logo")
+    if logo:
+        from pathlib import Path as _P
+
+        from pipeline.util import ROOT
+
+        p = _P(logo)
+        if not p.is_absolute():
+            p = ROOT / p
+        if p.is_file():
+            extra += ["-i", str(p)]
+            idx["logo"] = n
+            n += 1
+
+    return extra, idx
+
+
+def _filters(
+    cfg: dict[str, Any],
+    layout: str,
+    face: dict[str, Any] | None,
+    branding: dict[str, Any] | None,
+    idx: dict[str, int | None],
+    transcript: dict[str, Any] | None,
+    hook: str,
+    clip_len: float,
+    ass_path: Path | None,
+    variables: dict[str, Any] | None,
+) -> str:
+    chain = _video_chain(cfg, layout, face, idx.get("bg"))
+
+    if ass_path is not None:
+        ass_path.write_text(
+            build_ass(transcript, hook, clip_len, cfg, brand=branding, variables=variables),
+            encoding="utf-8",
+        )
+        chain += f";[v0]ass=filename='{_escape_filter_path(ass_path)}'[v1]"
+    else:
+        chain += ";[v0]null[v1]"
+
+    from cortai.branding import build as build_branding
+
+    _extra, brand_filter = build_branding("v1", "vout", idx, branding)
+    return chain + ";" + brand_filter
 
 
 def render_clip(
@@ -328,26 +475,18 @@ def render_clip(
     layout: str = "game",
     face: dict[str, Any] | None = None,
     focus_x: float | None = None,
+    variables: dict[str, Any] | None = None,
 ) -> Path:
     clip_len = max(1.0, end_s - start_s)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if focus_x is not None:
-        cfg = {**cfg, "focus_x": focus_x}
-    filt = _video_chain(cfg, layout, face)
-    if cfg.get("burn_subs", True):
-        ass_path = out_path.with_suffix(".ass")
-        ass_path.write_text(
-            build_ass(transcript, hook, clip_len, cfg), encoding="utf-8"
-        )
-        filt += f";[v0]ass=filename='{_escape_filter_path(ass_path)}'[v1]"
-    else:
-        filt += ";[v0]null[v1]"
+    render_cfg = {**cfg, "focus_x": focus_x} if focus_x is not None else cfg
+    extra, idx = _brand_inputs(branding)
+    ass_path = out_path.with_suffix(".ass") if render_cfg.get("burn_subs", True) else None
 
-    from cortai.branding import build as build_branding
-
-    extra_inputs, brand_filter = build_branding("v1", "vout", 1, branding)
-    filt += ";" + brand_filter
+    filt = _filters(
+        render_cfg, layout, face, branding, idx, transcript, hook, clip_len, ass_path, variables
+    )
 
     log(f"[render] {out_path.name}  {start_s:.1f}s -> {end_s:.1f}s ({clip_len:.0f}s)")
     run(
@@ -363,7 +502,7 @@ def render_clip(
             f"{clip_len:.3f}",
             "-i",
             str(source),
-            *[arg for pair in extra_inputs for arg in pair],
+            *extra,
             "-filter_complex",
             filt,
             "-map",
@@ -403,22 +542,18 @@ def render_still(
     layout: str = "game",
     face: dict[str, Any] | None = None,
     focus_x: float | None = None,
+    variables: dict[str, Any] | None = None,
 ) -> Path:
-    """Mesmo visual do clipe, mas um unico frame (preview do builder)."""
-    if focus_x is not None:
-        cfg = {**cfg, "focus_x": focus_x}
-    filt = _video_chain(cfg, layout, face)
-    if cfg.get("burn_subs", True):
-        ass_path = out_path.with_suffix(".ass")
-        ass_path.write_text(build_ass(transcript, hook, 10.0, cfg), encoding="utf-8")
-        filt += f";[v0]ass=filename='{_escape_filter_path(ass_path)}'[v1]"
-    else:
-        filt += ";[v0]null[v1]"
-    from cortai.branding import build as build_branding
-
-    extra_inputs, brand_filter = build_branding("v1", "vout", 1, branding)
-    filt += ";" + brand_filter
+    """Mesmo visual do clipe, mas um unico frame (preview do editor)."""
+    render_cfg = {**cfg, "focus_x": focus_x} if focus_x is not None else cfg
+    extra, idx = _brand_inputs(branding)
+    ass_path = out_path.with_suffix(".ass") if render_cfg.get("burn_subs", True) else None
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    filt = _filters(
+        render_cfg, layout, face, branding, idx, transcript, hook, 10.0, ass_path, variables
+    )
+
     run(
         [
             find_exe("ffmpeg"),
@@ -428,12 +563,11 @@ def render_still(
             "error",
             "-i",
             str(source),
-            *[arg for pair in extra_inputs for arg in pair],
+            *extra,
             "-filter_complex",
             filt,
             "-map",
             "[vout]",
-            # seek na SAIDA: mantem o tempo do ASS (hook/legenda) correto no frame
             "-ss",
             f"{max(0.0, at_s):.3f}",
             "-frames:v",

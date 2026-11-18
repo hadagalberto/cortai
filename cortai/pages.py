@@ -67,6 +67,18 @@ aside.preview{position:sticky;top:72px;display:grid;gap:12px}
 .mini .row.full{grid-template-columns:1fr}
 .mini .row>*{min-width:0}
 
+.tpl-row{display:grid;grid-template-columns:150px 80px 80px 90px 64px;gap:8px;align-items:center;padding:6px 0}
+.tpl-head{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:4px}
+.tpl-head div{text-align:center}
+.tpl-name{font-size:12.5px;color:var(--fg)}
+.tpl-row .inp{height:30px;font-size:12px;text-align:center}
+.tpl-row .inp.c{padding:2px}
+.sub{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.sub-t{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+.pool{display:flex;flex-wrap:wrap;gap:8px}
+.thumb{width:64px;height:64px;padding:0;border-radius:8px;border:2px solid var(--line);background:#000;overflow:hidden;cursor:pointer}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb.on{border-color:var(--acc)}
 .savebar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;align-items:center;gap:12px;padding:10px 22px;background:rgba(11,12,15,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line)}
 .savebar .st{font-size:12px;color:var(--faint)}
 .savebar .st.dirty{color:var(--acc)}
@@ -195,6 +207,8 @@ function buildSchema(){
      {p:'maintenance.db_retention_days',l:'apagar log e custo após',u:'dias',t:'num',min:7,max:3650},
      {p:'maintenance.run_every_hours',l:'rodar a cada',u:'h',t:'num',min:1,max:168}]);
 
+  sec('template','Template do vídeo','Posição dos textos, fundo e arte do canal', []);
+
   sec('transcricao','Transcrição','ASR e vocabulário; trocar modelo exige reiniciar',
     [{p:'asr.language',l:'idioma',t:'text'},
      {p:'asr.models.openrouter',l:'modelo via OpenRouter',t:'text'},
@@ -213,14 +227,111 @@ function control(it){
   return '<input class="inp" type="text" data-p="'+p+'" data-t="text" value="'+(v==null?'':String(v).replace(/"/g,'&quot;'))+'">';
 }
 
+const TABS=[['geral','Captura'],['momento','Detecção'],['juiz','Classificador'],['video','Vídeo'],['marca','Marca'],['template','Template'],['publicacao','Publicação'],['manutencao','Manutenção'],['transcricao','Transcrição']];
+let curTab='geral';
+
+function tabOf(id){
+  if(id==='captura') return 'geral';
+  if(id==='momento') return 'momento';
+  if(id==='juiz') return 'juiz';
+  if(id==='video') return 'video';
+  if(id==='marca') return 'marca';
+  if(id==='template') return 'template';
+  if(id==='publicacao') return 'publicacao';
+  if(id==='manutencao') return 'manutencao';
+  return 'transcricao';
+}
+
+function el(p,size,color){
+  const L=((S.branding||{}).layout||{})[p]||{};
+  return {x:L.x===undefined?540:L.x, y:L.y===undefined?200:L.y, size:L.size===undefined?size:L.size, color:L.color===undefined?color:L.color};
+}
+
+function swInput(key,checked,label){
+  return '<label class="sw"><input type="checkbox" data-tpl="'+key+'" '+(checked?'checked':'')+'><span></span></label>';
+}
+
+function templateHtml(){
+  const b=S.branding||{};
+  const lay=b.layout||{};
+  const bg=b.background||{mode:'blur',images:[]};
+  const art=b.art||{image:'',opacity:1};
+  const blocos=[['hook','Gancho',92,'0xFFD400'],['handle','@ do canal',46,'0xFFFFFF'],['cta','CTA do rodapé',40,'0xFFD400'],['extra','Texto extra',38,'0xFFFFFF']];
+
+  const campos = blocos.map(([k,label,size,color])=>{
+    const e=el(k,size,color);
+    return '<div class="tpl-row"><div class="tpl-name">'+label+'</div>'+
+      '<input class="inp" type="number" data-tpl="'+k+'.x" value="'+e.x+'" title="X">'+
+      '<input class="inp" type="number" data-tpl="'+k+'.y" value="'+e.y+'" title="Y">'+
+      '<input class="inp" type="number" data-tpl="'+k+'.size" value="'+e.size+'" title="tamanho">'+
+      '<input class="inp c" type="color" data-tpl="'+k+'.color" value="'+(typeof numToHex==='function'?numToHex(e.color):'#FFFFFF')+'">'+
+    '</div>';
+  }).join('');
+
+  const extraOn = !!((lay.extra||{}).enabled);
+  const extraTxt = (lay.extra||{}).text||'';
+
+  const assets = window.ASSETS||{bg:[],art:[],logo:[]};
+  const pool = (bg.images||[]);
+  const thumbs = (assets.bg||[]).map(a=>{
+    const on = pool.includes(a.path);
+    return '<button type="button" class="thumb'+(on?' on':'')+'" data-pick="'+a.path+'" title="'+a.name+'">'+
+      '<img src="/media/asset?p='+encodeURIComponent(a.path)+'" alt=""></button>';
+  }).join('') || '<div class="hint">nenhuma imagem enviada</div>';
+
+  return ''+
+  '<section class="card" id="template"><header><h2>Template do vídeo</h2><p>Posição dos textos, fundo e arte do canal</p></header><div class="body">'+
+    '<div class="tpl-head tpl-row"><div class="tpl-name">elemento</div><div>X</div><div>Y</div><div>tamanho</div><div>cor</div></div>'+
+    campos+
+    '<div class="frow"><div class="lab"><label>Texto extra</label><span class="hint">use variáveis: {streamer} · {handle} · {date}</span></div>'+
+      '<input class="inp" type="text" data-tpl="extra.text" value="'+String(extraTxt).replace(/"/g,'&quot;')+'"></div>'+
+    '<div class="frow"><div class="lab"><label>Mostrar texto extra</label><span class="hint">linha livre acima do @</span></div>'+
+      '<label class="sw"><input type="checkbox" data-tpl="extra.enabled" '+(extraOn?'checked':'')+'><span></span></label></div>'+
+
+    '<div class="sub"><div class="sub-t">Fundo</div>'+
+      '<div class="frow"><div class="lab"><label>Modo</label><span class="hint">imagem usa uma do pool; sorteia por clipe</span></div>'+
+        '<select class="inp" data-tpl="background.mode">'+
+          '<option value="blur"'+(bg.mode!=='image'?' selected':'')+'>Desfoque do vídeo</option>'+
+          '<option value="image"'+(bg.mode==='image'?' selected':'')+'>Imagem do pool</option>'+
+        '</select></div>'+
+      '<div class="pool">'+thumbs+'</div>'+
+      '<div class="row" style="margin-top:10px"><label class="btn" style="cursor:pointer">enviar imagem<input type="file" accept="image/*" hidden data-upload="bg"></label>'+
+      '<span class="hint" style="align-self:center">'+(pool.length)+' selecionada(s)</span></div>'+
+    '</div>'+
+
+    '<div class="sub"><div class="sub-t">Arte do canal</div>'+
+      '<div class="frow"><div class="lab"><label>Imagem sobreposta</label><span class="hint">PNG com transparência; fica por cima do vídeo</span></div>'+
+        '<label class="btn" style="cursor:pointer">enviar arte<input type="file" accept="image/*" hidden data-upload="art"></label></div>'+
+      '<div class="frow"><div class="lab"><label>Opacidade</label></div>'+
+        '<input class="inp" type="number" step="0.05" min="0" max="1" data-tpl="art.opacity" value="'+art.opacity+'"></div>'+
+      '<div class="frow"><div class="lab"><label>Arte atual</label></div><div class="hint" id="artname">'+(art.image? String(art.image).split('/').pop():'nenhuma')+'</div></div>'+
+    '</div>'+
+  '</div></section>';
+}
+
 function buildForm(){
-  document.getElementById('nav').innerHTML = '<div class="grp">Seções</div>' +
-    F.map(f=>'<a href="#'+f.id+'" data-nav="'+f.id+'">'+f.title+'</a>').join('');
-  document.getElementById('forms').innerHTML = F.map(f=>
-    '<section class="card" id="'+f.id+'"><header><h2>'+f.title+'</h2><p>'+f.hint+'</p></header>'+
-    '<div class="body">'+f.items.map(it=>
-      '<div class="frow"><div class="lab"><label>'+it.l+'</label>'+(it.h?'<span class="hint">'+it.h+'</span>':'')+'</div>'+control(it)+'</div>'
-    ).join('')+'</div></section>').join('');
+  document.getElementById('nav').innerHTML = '<div class="grp">Abas</div>' +
+    TABS.map(([id,label])=>'<a href="#" data-tab="'+id+'" class="'+(curTab===id?'on':'')+'">'+label+'</a>').join('');
+
+  const sectionHtml = F.map(f=>{
+    if(f.id==='template') return templateHtml();
+    return '<section class="card" id="'+f.id+'"><header><h2>'+f.title+'</h2><p>'+f.hint+'</p></header>'+
+      '<div class="body">'+f.items.map(it=>
+        '<div class="frow"><div class="lab"><label>'+it.l+'</label>'+(it.h?'<span class="hint">'+it.h+'</span>':'')+'</div>'+control(it)+'</div>'
+      ).join('')+'</div></section>';
+  }).join('');
+
+  // garante a aba do template mesmo sem secao declarada
+  const hasTemplate = F.some(f=>f.id==='template');
+  document.getElementById('forms').innerHTML = sectionHtml + (hasTemplate?'':templateHtml());
+
+  document.querySelectorAll('section.card').forEach(sec=>{
+    sec.style.display = tabOf(sec.id)===curTab ? '' : 'none';
+  });
+
+  document.querySelectorAll('[data-tab]').forEach(a=>{
+    a.onclick=(ev)=>{ ev.preventDefault(); curTab=a.dataset.tab; buildForm(); if(curTab==='template') refreshPreview(); };
+  });
 
   document.querySelectorAll('[data-p]').forEach(el=>{
     const ev = el.dataset.t==='bool' ? 'change' : 'input';
@@ -235,12 +346,58 @@ function buildForm(){
     });
   });
 
-  const links=[...document.querySelectorAll('[data-nav]')];
-  const obs=new IntersectionObserver(es=>{
-    es.forEach(e=>{ if(e.isIntersecting){ links.forEach(a=>a.classList.toggle('on', a.dataset.nav===e.target.id)); } });
-  },{rootMargin:'-70px 0px -60% 0px'});
-  F.forEach(f=>{ const el=document.getElementById(f.id); if(el) obs.observe(el); });
+  document.querySelectorAll('[data-tpl]').forEach(el=>{
+    const ev = el.type==='checkbox' ? 'change' : 'input';
+    el.addEventListener(ev,()=>{
+      const path=el.dataset.tpl;
+      let v=el.value;
+      if(el.type==='checkbox') v=el.checked;
+      else if(el.type==='number') v=Number(v);
+      else if(el.type==='color') v=hexToNum(v);
+      const [a,b]=path.split('.');
+      if(a==='extra'||a==='hook'||a==='handle'||a==='cta'){
+        S.branding.layout=S.branding.layout||{};
+        S.branding.layout[a]=S.branding.layout[a]||{};
+        S.branding.layout[a][b]=v;
+      } else if(a==='background'){
+        S.branding.background=S.branding.background||{mode:'blur',images:[]};
+        S.branding.background[b]=v;
+      } else if(a==='art'){
+        S.branding.art=S.branding.art||{image:'',opacity:1};
+        S.branding.art[b]=v;
+      }
+      markDirty(); schedulePreview();
+    });
+  });
+
+  document.querySelectorAll('[data-pick]').forEach(btn=>{
+    btn.onclick=()=>{
+      S.branding.background=S.branding.background||{mode:'blur',images:[]};
+      const imgs=new Set(S.branding.background.images||[]);
+      const p=btn.dataset.pick;
+      if(imgs.has(p)) imgs.delete(p); else imgs.add(p);
+      S.branding.background.images=[...imgs];
+      S.branding.background.mode='image';
+      buildForm(); markDirty(); schedulePreview();
+    };
+  });
+
+  document.querySelectorAll('[data-upload]').forEach(input=>{
+    input.onchange=async ()=>{
+      const file=input.files&&input.files[0]; if(!file) return;
+      const kind=input.dataset.upload;
+      const b64=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(file);});
+      const r=await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,name:file.name,data:b64})});
+      const j=await r.json().catch(()=>({}));
+      if(!j.ok){ toast('erro no upload: '+(j.error||r.status)); return; }
+      if(kind==='art'){ S.branding.art=S.branding.art||{image:'',opacity:1}; S.branding.art.image=j.path; }
+      if(kind==='bg'){ S.branding.background=S.branding.background||{mode:'image',images:[]}; S.branding.background.mode='image'; S.branding.background.images=[...(S.branding.background.images||[]), j.path]; }
+      await loadAssets(); buildForm(); markDirty(); schedulePreview(); toast('imagem enviada');
+    };
+  });
 }
+
+async function loadAssets(){ try{ window.ASSETS=await (await fetch('/api/assets')).json(); }catch(e){ window.ASSETS={bg:[],art:[],logo:[]}; } }
 
 function markDirty(){ dirty=true; const st=document.getElementById('status'); st.textContent='Alterações não salvas'; st.className='st dirty'; }
 
@@ -249,9 +406,14 @@ function schedulePreview(){clearTimeout(tmr);tmr=setTimeout(refreshPreview,450);
 
 async function refreshPreview(){
   const img=document.getElementById('preview'), ph=document.getElementById('ph');
-  const body={template:tplName,hook:document.getElementById('hook').value,layout:document.getElementById('layout').value,render:{},branding:{}};
-  ['mode','fps','crf','preset','blur_sigma','karaoke_size','karaoke_words','karaoke_margin_v','hook_size','hook_caption','burn_subs','pip_scale','pip_position','pip_offset_y'].forEach(k=>{ if(g('render.'+k)!==undefined) body.render[k]=g('render.'+k); });
-  ['handle','cta','accent','logo','logo_position','logo_width','handle_offset','cta_offset'].forEach(k=>{ if(g('branding.'+k)!==undefined) body.branding[k]=g('branding.'+k); });
+  const body={
+    template:tplName,
+    hook:document.getElementById('hook').value,
+    layout:document.getElementById('layout').value,
+    render:{...(S.render||{})},
+    branding:{...(S.branding||{})},
+    variables:{streamer:document.getElementById('assign').value||'canal', date:new Date().toLocaleDateString('pt-BR').slice(0,5)}
+  };
   try{
     const r=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok){ph.textContent='Preview indisponível';ph.style.display='block';return;}
@@ -261,6 +423,7 @@ async function refreshPreview(){
 }
 
 async function load(){
+  await loadAssets();
   S=await (await fetch('/api/config')).json();
   streams=(await (await fetch('/api/state')).json()).streams||[];
   const tpls=Object.keys(S.templates||{default:{}});

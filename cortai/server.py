@@ -10,7 +10,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote
 
 from pipeline.util import log
 
@@ -202,6 +202,13 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
                 self._send(200, SETTINGS_PAGE.encode("utf-8"), "text/html; charset=utf-8")
                 return
 
+            if path == "/api/assets":
+                from .assets import list_assets
+
+                body = json.dumps(list_assets(), ensure_ascii=False).encode("utf-8")
+                self._send(200, body, "application/json; charset=utf-8")
+                return
+
             if path == "/api/config":
                 body = json.dumps(cfg.data, ensure_ascii=False, default=str).encode("utf-8")
                 self._send(200, body, "application/json; charset=utf-8")
@@ -210,6 +217,19 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
             if path == "/api/state":
                 body = json.dumps(snapshot(cfg, db), ensure_ascii=False).encode("utf-8")
                 self._send(200, body, "application/json; charset=utf-8")
+                return
+
+            if path == "/media/asset":
+                from .assets import resolve as resolve_asset
+
+                qs = parse_qs(self.path.partition("?")[2])
+                rel = (qs.get("p") or [""])[0]
+                file = resolve_asset(unquote(rel))
+                if not file:
+                    self._send(404, b"asset not found", "text/plain")
+                    return
+                ctype = "image/png" if file.suffix.lower() == ".png" else "image/jpeg"
+                self._send(200, file.read_bytes(), ctype, cache=True)
                 return
 
             if path.startswith("/media/"):
@@ -241,6 +261,23 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
 
             if path == "/api/config":
                 self._handle_save_config(body)
+                return
+
+            if path == "/api/upload":
+                from .assets import save_b64
+
+                try:
+                    payload = json.loads(body or b"{}")
+                    result = save_b64(
+                        str(payload.get("kind") or "bg"),
+                        str(payload.get("name") or "arquivo.png"),
+                        str(payload.get("data") or ""),
+                    )
+                except Exception as exc:
+                    self._send(400, json.dumps({"ok": False, "error": str(exc)}).encode(),
+                               "application/json; charset=utf-8")
+                    return
+                self._send(200, json.dumps(result).encode(), "application/json; charset=utf-8")
                 return
 
             if path == "/api/preview":
@@ -344,6 +381,15 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
             if not self._authed():
                 self._send(401, b"unauthorized", "text/plain")
                 return
+            masset = re.match(r"^/api/assets/([a-z]+)/(.+)$", path)
+            if masset:
+                from .assets import delete as delete_asset
+
+                ok = delete_asset(unquote(masset.group(1)), unquote(masset.group(2)))
+                self._send(200 if ok else 404, json.dumps({"ok": ok}).encode(),
+                           "application/json; charset=utf-8")
+                return
+
             m = re.match(r"^/api/templates/([^/]+)$", path)
             if not m:
                 self._send(404, b"not found", "text/plain")
@@ -406,6 +452,7 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
                     layout=str(payload.get("layout") or "pip"),
                     render_override=payload.get("render") or {},
                     branding_override=payload.get("branding") or {},
+                    variables=payload.get("variables") or {},
                 )
             except Exception as exc:
                 log(f"[preview] {exc}")
