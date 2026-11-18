@@ -243,7 +243,12 @@ def _word_cards(
 def _word_events(
     words: list[dict[str, Any]], clip_len: float, cfg: dict[str, Any], width: int
 ) -> list[str]:
-    """Legenda estilo clipe viral: 2-3 palavras na tela, palavra atual em destaque."""
+    """Legenda estilo clipe viral: 2-3 palavras na tela, palavra atual em destaque.
+
+    Os eventos nao podem se sobrepor: o libass empilha duas falas ativas e o
+    texto aparece duplicado na tela. Por isso a janela de cada cartao e cortada
+    no inicio do cartao seguinte.
+    """
     size = int(cfg.get("karaoke_size") or 96)
     max_words = int(cfg.get("karaoke_words") or 3)
     usable = width - 128
@@ -255,17 +260,34 @@ def _word_events(
         return []
 
     cards = _word_cards(words, max_words, max_chars)
+
+    janelas: list[tuple[float, float]] = []
+    for i, card in enumerate(cards):
+        ini = max(0.0, float(card[0]["start"]))
+        fim = float(card[-1]["end"] or 0.0) or ini + 0.4
+        if i + 1 < len(cards):
+            proximo = max(0.0, float(cards[i + 1][0]["start"]))
+            if proximo > ini:
+                fim = min(fim, proximo - 0.04)
+        fim = min(fim, clip_len)
+        if fim <= ini:
+            fim = min(ini + 0.12, clip_len)
+        janelas.append((ini, fim))
+
     events: list[str] = []
-    for ci, card in enumerate(cards):
-        card_end = card[-1]["end"] or card[-1]["start"] + 0.4
-        # cada palavra vira um evento: o resto do cartao fica visivel, a atual acende
+    for card, (card_start, card_end) in zip(cards, janelas):
+        if card_end <= card_start:
+            continue
+        cursor = card_start
         for wi, word in enumerate(card):
-            start = max(0.0, word["start"])
+            start = max(cursor, float(word["start"]))
             if wi + 1 < len(card):
-                end = max(start + 0.1, card[wi + 1]["start"])
+                end = max(start + 0.08, float(card[wi + 1]["start"]))
             else:
-                end = max(start + 0.15, min(card_end, clip_len))
-            end = min(end, clip_len)
+                end = card_end
+            end = min(end, card_end)
+            if end <= start:
+                end = min(start + 0.08, card_end)
             if end <= start:
                 continue
             parts = []
@@ -276,6 +298,7 @@ def _word_events(
             events.append(
                 f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Karaoke,,0,0,0,,{{\\fs{size}}}{body}"
             )
+            cursor = end
     return events
 
 
