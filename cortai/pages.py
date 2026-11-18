@@ -61,6 +61,10 @@ aside.preview{position:sticky;top:72px;display:grid;gap:12px}
 .pv{background:#000;border:1px solid var(--line);border-radius:14px;overflow:hidden;aspect-ratio:9/16;display:grid;place-items:center;position:relative}
 .pv img{width:100%;height:100%;object-fit:contain;display:block}
 .pv .ph{position:absolute;color:var(--faint);font-size:11px}
+.layer{position:absolute;inset:0;pointer-events:none}
+.handle{position:absolute;transform:translate(-50%,-50%);border:1px dashed rgba(140,180,255,.55);background:rgba(110,168,255,.10);border-radius:4px;pointer-events:auto;cursor:move;display:grid;place-items:center}
+.handle span{font-size:9px;color:#cfe1ff;background:rgba(0,0,0,.55);padding:1px 4px;border-radius:3px;pointer-events:none;white-space:nowrap}
+.handle.drag{border-color:var(--acc);background:rgba(255,212,0,.14)}
 .mini{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
 .mini .t{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
 .mini .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -100,7 +104,7 @@ aside.preview{position:sticky;top:72px;display:grid;gap:12px}
   <nav class="side" id="nav"></nav>
   <div id="forms"></div>
   <aside class="preview">
-    <div class="pv"><img id="preview" alt=""><span class="ph" id="ph">Gerando preview…</span></div>
+    <div class="pv" id="pvwrap"><img id="preview" alt=""><div class="layer" id="layer"></div><span class="ph" id="ph">Gerando preview…</span></div>
     <div class="mini">
       <div class="t">Prévia</div>
       <div class="row full" style="margin-bottom:8px">
@@ -281,6 +285,7 @@ function templateHtml(){
 
   return ''+
   '<section class="card" id="template"><header><h2>Template do vídeo</h2><p>Posição dos textos, fundo e arte do canal</p></header><div class="body">'+
+    '<div class="hint" style="margin:2px 0 10px">Arraste os elementos direto no preview. Snap automático no centro. Os números abaixo também funcionam.</div>'+
     '<div class="tpl-head tpl-row"><div class="tpl-name">elemento</div><div>X</div><div>Y</div><div>tamanho</div><div>cor</div></div>'+
     campos+
     '<div class="frow"><div class="lab"><label>Texto extra</label><span class="hint">use variáveis: {streamer} · {handle} · {date}</span></div>'+
@@ -324,6 +329,7 @@ function buildForm(){
   // garante a aba do template mesmo sem secao declarada
   const hasTemplate = F.some(f=>f.id==='template');
   document.getElementById('forms').innerHTML = sectionHtml + (hasTemplate?'':templateHtml());
+  if(curTab==='template') setTimeout(renderHandles, 60);
 
   document.querySelectorAll('section.card').forEach(sec=>{
     sec.style.display = tabOf(sec.id)===curTab ? '' : 'none';
@@ -419,7 +425,87 @@ async function refreshPreview(){
     if(!r.ok){ph.textContent='Preview indisponível';ph.style.display='block';return;}
     img.src=URL.createObjectURL(await r.blob());
     ph.style.display='none';
+    img.onload=()=>renderHandles();
   }catch(e){ ph.textContent='Preview falhou'; ph.style.display='block'; }
+}
+
+const DRAGGABLE=[['hook','Gancho'],['handle','@ do canal'],['cta','CTA'],['extra','Texto extra']];
+
+function layoutOf(k){
+  S.branding=S.branding||{};
+  S.branding.layout=S.branding.layout||{};
+  S.branding.layout[k]=S.branding.layout[k]||{};
+  return S.branding.layout[k];
+}
+
+function renderHandles(){
+  const layer=document.getElementById('layer');
+  if(!layer) return;
+  layer.innerHTML='';
+  const lay=(S.branding||{}).layout||{};
+  for(const [k,label] of DRAGGABLE){
+    const e=lay[k]||{};
+    if(k==='extra' && !e.enabled) continue;
+    const size=Number(e.size||40);
+    const w=Math.max(size*4.2, size*(label.length*0.55));
+    const h=size*1.7;
+    const box=document.createElement('div');
+    box.className='handle';
+    box.dataset.k=k;
+    box.style.left=((e.x===undefined?540:e.x)/1080*100)+'%';
+    box.style.top=((e.y===undefined?960:e.y)/1920*100)+'%';
+    box.style.width=(w/1080*100)+'%';
+    box.style.height=(h/1920*100)+'%';
+    box.innerHTML='<span>'+label+'</span>';
+    box.addEventListener('pointerdown',startDrag);
+    layer.appendChild(box);
+  }
+}
+
+let dragging=null;
+
+function startDrag(ev){
+  ev.preventDefault();
+  const box=ev.currentTarget;
+  const k=box.dataset.k;
+  const wrap=document.getElementById('pvwrap');
+  const rect=wrap.getBoundingClientRect();
+  dragging={k, box, rect};
+  box.classList.add('drag');
+  box.setPointerCapture(ev.pointerId);
+  box.addEventListener('pointermove',onDrag);
+  box.addEventListener('pointerup',endDrag);
+  box.addEventListener('pointercancel',endDrag);
+}
+
+function onDrag(ev){
+  if(!dragging) return;
+  const {k, box, rect}=dragging;
+  let x=(ev.clientX-rect.left)/rect.width*1080;
+  let y=(ev.clientY-rect.top)/rect.height*1920;
+  // snap: centro e bordas
+  if(Math.abs(x-540)<16) x=540;
+  if(Math.abs(y-960)<16) y=960;
+  x=Math.max(40, Math.min(1040, Math.round(x/2)*2));
+  y=Math.max(40, Math.min(1880, Math.round(y/2)*2));
+
+  const e=layoutOf(k);
+  e.x=x; e.y=y;
+  box.style.left=(x/1080*100)+'%';
+  box.style.top=(y/1920*100)+'%';
+
+  const ix=document.querySelector('[data-tpl="'+k+'.x"]');
+  const iy=document.querySelector('[data-tpl="'+k+'.y"]');
+  if(ix) ix.value=x;
+  if(iy) iy.value=y;
+  markDirty();
+}
+
+function endDrag(ev){
+  if(!dragging) return;
+  dragging.box.classList.remove('drag');
+  dragging=null;
+  refreshPreview();
 }
 
 async function load(){
