@@ -117,7 +117,12 @@ def snapshot(cfg: Any, db: DB) -> dict[str, Any]:
             }
         )
 
-    clips = [_clip_row(r, db) for r in db.clips(limit=40)]
+    by_id = {int(r["id"]): r["slug"] for r in db.streams(None)}
+    clips = []
+    for row in db.clips(limit=40):
+        item = _clip_row(row, db)
+        item["slug"] = by_id.get(int(row["stream_id"]), "")
+        clips.append(item)
 
     logs = []
     for r in db.conn().execute(

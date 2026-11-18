@@ -424,6 +424,22 @@ def _handler(cfg: Any, db: DB, auth: Any = None, cookie_secure: bool = False):
                            "application/json; charset=utf-8")
                 return
 
+            mstream = re.match(r"^/api/streams/([^/]+)$", path)
+            if mstream:
+                from .streams import remove as remove_stream
+
+                try:
+                    report = remove_stream(db, cfg, unquote(mstream.group(1)))
+                except Exception as exc:
+                    log(f"[streams] falha ao remover: {exc}")
+                    self._send(500, json.dumps({"ok": False, "error": str(exc)}).encode(),
+                               "application/json; charset=utf-8")
+                    return
+                body = json.dumps(report, ensure_ascii=False).encode()
+                self._send(200 if report.get("ok") else 404, body,
+                           "application/json; charset=utf-8")
+                return
+
             m = re.match(r"^/api/templates/([^/]+)$", path)
             if not m:
                 self._send(404, b"not found", "text/plain")

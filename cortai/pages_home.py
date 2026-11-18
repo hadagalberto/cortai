@@ -59,6 +59,23 @@ h2.sec span{font-weight:400;letter-spacing:0;text-transform:none;font-size:11.5p
 .bar i{display:block;height:100%;background:var(--acc);transition:width .4s;border-radius:99px}
 .kill{margin-left:auto;background:none;border:1px solid var(--line);color:var(--faint);border-radius:7px;padding:4px 10px;cursor:pointer;font-size:11.5px}
 .kill:hover{border-color:rgba(255,92,92,.45);color:#ffb4b4}
+.kill.del{margin-left:0}
+.kill.del:hover{border-color:rgba(255,92,92,.6);background:rgba(255,92,92,.09);color:#ffb4b4}
+
+.accs{display:block}
+.acc{background:var(--panel);border:1px solid var(--line);border-radius:13px;margin-bottom:10px;overflow:hidden}
+.acc>summary{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;list-style:none;user-select:none}
+.acc>summary::-webkit-details-marker{display:none}
+.acc>summary:hover{background:#12141a}
+.acc-dot{width:8px;height:8px;border-radius:99px;background:#3a3f4a;flex:0 0 auto}
+.acc-dot.on{background:var(--ok);box-shadow:0 0 0 4px rgba(61,220,132,.12)}
+.acc-name{font-weight:600;font-size:13px}
+.acc-n{font-size:10.5px;color:var(--faint);border:1px solid var(--line2);border-radius:99px;padding:1px 8px;font-variant-numeric:tabular-nums}
+.acc-when{margin-left:auto;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.acc-arrow{color:var(--faint);font-size:10px;transition:transform .18s}
+.acc[open] .acc-arrow{transform:rotate(180deg)}
+.acc[open]>summary{border-bottom:1px solid var(--line)}
+.acc .clips{padding:12px}
 
 .clips{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:14px}
 .clip{background:var(--panel);border:1px solid var(--line);border-radius:13px;overflow:hidden;transition:border-color .15s,transform .15s}
@@ -129,7 +146,7 @@ dialog button{position:absolute;top:-34px;right:0;background:none;border:none;co
     <div class="streams" id="streams"></div>
 
     <h2 class="sec">clipes <span id="clipsub"></span></h2>
-    <div class="clips" id="clips"></div>
+    <div class="accs" id="clips"></div>
   </div>
 
   <aside>
@@ -161,9 +178,10 @@ function buildCard(){
   const mFace=document.createElement('span');mFace.className='meta';
   const mClips=document.createElement('span');mClips.className='meta';
   const kill=document.createElement('button');kill.className='kill';kill.textContent='parar';
-  row2.append(bar,mBuf,mFace,mClips,kill);
+  const del=document.createElement('button');del.className='kill del';del.textContent='remover';
+  row2.append(bar,mBuf,mFace,mClips,kill,del);
   info.append(row1,row2);root.append(vid,info);
-  return {root,vid,dot,name,meta,fill,mBuf,mFace,mClips,kill,previewAt:null};
+  return {root,vid,dot,name,meta,fill,mBuf,mFace,mClips,kill,del,previewAt:null};
 }
 
 function renderStreams(list){
@@ -183,6 +201,7 @@ function renderStreams(list){
     c.mClips.textContent=s.clips+' clipes';
     c.kill.onclick=()=>stopStream(s.slug);
     c.kill.style.display=s.status==='active'?'block':'none';
+    c.del.onclick=()=>removeStream(s.slug, s.clips);
     if(s.preview_at && c.previewAt!==s.preview_at){
       c.previewAt=s.preview_at;
       c.vid.src=s.preview_url+'?t='+s.preview_at;
@@ -200,6 +219,70 @@ function publishControl(c){
   if(p.state==='error') return '<button class="pub err" onclick="publishClip('+c.id+')" title="'+esc(p.error||'')+'">Reenviar</button>';
   if(!window.CAN_PUBLISH) return '';
   return '<button class="pub" onclick="publishClip('+c.id+')">Publicar no YouTube</button>';
+}
+
+function clipCard(c){
+  const thumb=c.has_thumb? '<img loading="lazy" src="'+c.thumb_url+'?t='+c.id+'" alt="">':'<div class="nocap">Sem preview</div>';
+  const click=c.video_url? 'onclick="play(\''+c.video_url+'\')"':'';
+  return '<div class="clip"><div class="thumbwrap" '+click+'>'+thumb+
+    '<div class="badges"><span class="badge score">'+c.score+'</span>'+
+    '<span class="badge layout">'+esc(c.layout)+'</span>'+
+    '<span class="badge size">'+c.size_mb+'MB</span></div></div>'+
+    '<div class="body"><div class="t">'+esc(c.title||'—')+'</div>'+
+    '<div class="h">'+esc(c.hook||'')+'</div>'+
+    '<div class="c">'+esc(c.caption||'')+'</div>'+
+    '<div class="tags">'+esc(c.hashtags||'')+'</div>'+
+    '<div class="foot"><span>'+esc(c.when)+'</span><span>#'+c.id+'</span></div>'+
+    '<div class="vote">'+
+      '<button class="up'+(c.feedback===1?' on':'')+'" onclick="vote('+c.id+',1)" title="publicaria">👍</button>'+
+      '<button class="dn'+(c.feedback===-1?' on':'')+'" onclick="vote('+c.id+',-1)" title="não presta">👎</button>'+
+    '</div>'+publishControl(c)+'</div></div>';
+}
+
+const openSlugs=new Set();
+let clipsStarted=false;
+
+function renderClips(list, streams){
+  const host=document.getElementById('clips');
+  const live=new Set(streams.filter(s=>s.live).map(s=>s.slug));
+  const order=streams.map(s=>s.slug);
+
+  const groups=new Map();
+  for(const s of order) groups.set(s, []);
+  for(const c of list){
+    const k=c.slug||'sem canal';
+    if(!groups.has(k)) groups.set(k,[]);
+    groups.get(k).push(c);
+  }
+  if(!groups.size){
+    host.innerHTML='<div class="empty">Nenhum clipe ainda. O sistema espera o buffer encher e um pico de energia.</div>';
+    return;
+  }
+  const keys=[...groups.keys()].sort((a,b)=>{
+    const ia=order.indexOf(a), ib=order.indexOf(b);
+    return (ia<0?999:ia)-(ib<0?999:ib);
+  });
+  if(!clipsStarted){ openSlugs.add(keys[0]); clipsStarted=true; }
+
+  host.innerHTML=keys.map(k=>{
+    const items=groups.get(k);
+    const isOpen=openSlugs.has(k);
+    const corpo=items.length
+      ? '<div class="clips">'+items.map(clipCard).join('')+'</div>'
+      : '<div class="empty" style="padding:18px">Nenhum clipe deste canal ainda</div>';
+    return '<details class="acc" data-slug="'+esc(k)+'"'+(isOpen?' open':'')+'>'+
+      '<summary><span class="acc-dot'+(live.has(k)?' on':'')+'"></span>'+
+        '<span class="acc-name">'+esc(k)+'</span>'+
+        '<span class="acc-n">'+items.length+'</span>'+
+        '<span class="acc-when">'+esc(items.length?items[0].when:'')+'</span>'+
+        '<span class="acc-arrow">▼</span></summary>'+corpo+'</details>';
+  }).join('');
+
+  host.querySelectorAll('details.acc').forEach(d=>{
+    d.addEventListener('toggle',()=>{
+      if(d.open) openSlugs.add(d.dataset.slug); else openSlugs.delete(d.dataset.slug);
+    });
+  });
 }
 
 function render(d){
@@ -247,23 +330,8 @@ function render(d){
 
   renderStreams(d.streams);
 
-  document.getElementById('clips').innerHTML = d.clips.length? d.clips.map(c=>{
-    const thumb=c.has_thumb? '<img loading="lazy" src="'+c.thumb_url+'?t='+c.id+'" alt="">':'<div class="nocap">Sem preview</div>';
-    const click=c.video_url? 'onclick="play(\''+c.video_url+'\')"':'';
-    return '<div class="clip"><div class="thumbwrap" '+click+'>'+thumb+
-      '<div class="badges"><span class="badge score">'+c.score+'</span>'+
-      '<span class="badge layout">'+esc(c.layout)+'</span>'+
-      '<span class="badge size">'+c.size_mb+'MB</span></div></div>'+
-      '<div class="body"><div class="t">'+esc(c.title||'—')+'</div>'+
-      '<div class="h">'+esc(c.hook||'')+'</div>'+
-      '<div class="c">'+esc(c.caption||'')+'</div>'+
-      '<div class="tags">'+esc(c.hashtags||'')+'</div>'+
-      '<div class="foot"><span>'+esc(c.when)+'</span><span>#'+c.id+'</span></div>'+
-      '<div class="vote">'+
-        '<button class="up'+(c.feedback===1?' on':'')+'" onclick="vote('+c.id+',1)" title="publicaria">👍</button>'+
-        '<button class="dn'+(c.feedback===-1?' on':'')+'" onclick="vote('+c.id+',-1)" title="não presta">👎</button>'+
-      '</div>'+publishControl(c)+'</div></div>';
-  }).join('') : '<div class="empty">Nenhum clipe ainda. O sistema espera o buffer encher e um pico de energia.</div>';
+  document.getElementById('clipsub').textContent=d.clips.length?(d.clips.length+' recentes'):'';
+  renderClips(d.clips, d.streams);
 
   document.getElementById('cands').innerHTML = d.candidates.length? d.candidates.map(c=>{
     const m=c.msg||''; const keep=/keep=True/.test(m);
@@ -301,6 +369,17 @@ async function stopStream(slug){
   if(!confirm('Parar '+slug+'?')) return;
   await fetch('/api/streams/'+encodeURIComponent(slug)+'/stop',{method:'POST'});
   lastJson='';tick();
+}
+async function removeStream(slug, clips){
+  const aviso='Remover '+slug+'?\n\nVai apagar o canal, '+clips+' clipe(s), as miniaturas e o buffer em disco.'
+    +'\nO que já foi publicado no YouTube continua lá. Não dá para desfazer.';
+  if(!confirm(aviso)) return;
+  const r=await fetch('/api/streams/'+encodeURIComponent(slug),{method:'DELETE'});
+  const j=await r.json().catch(()=>({}));
+  if(!j.ok){ alert('Erro ao remover: '+(j.error||r.status)); return; }
+  openSlugs.delete(slug);
+  cards.delete(slug);
+  lastJson=''; tick();
 }
 document.getElementById('addform').addEventListener('submit', async (e)=>{
   e.preventDefault();

@@ -139,6 +139,23 @@ class DB:
             )
         return list(self.conn().execute("SELECT * FROM streams ORDER BY id"))
 
+    def remove_stream(self, slug: str) -> dict[str, Any]:
+        """Apaga o canal e os clipes dele. Devolve os arquivos para quem for limpar."""
+        c = self.conn()
+        row = c.execute("SELECT id FROM streams WHERE slug=?", (slug,)).fetchone()
+        if not row:
+            return {"ok": False, "slug": slug, "clips": 0, "files": []}
+        sid = int(row["id"])
+        clips = list(c.execute("SELECT id, path FROM clips WHERE stream_id=?", (sid,)))
+        ids = [int(r["id"]) for r in clips]
+        if ids:
+            marks = ",".join("?" * len(ids))
+            c.execute(f"DELETE FROM publish_queue WHERE clip_id IN ({marks})", ids)
+            c.execute(f"DELETE FROM clips WHERE id IN ({marks})", ids)
+        c.execute("DELETE FROM streams WHERE id=?", (sid,))
+        files = [str(r["path"]) for r in clips if r["path"]]
+        return {"ok": True, "slug": slug, "clips": len(ids), "files": files}
+
     # -- clips ---------------------------------------------------------
     def add_clip(self, stream_id: int, **fields: Any) -> int:
         c = self.conn()

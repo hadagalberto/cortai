@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import shutil
+from pathlib import Path
 from typing import Any
 
 from .db import DB
@@ -44,6 +46,30 @@ def add(
     final_slug = slug or make_slug(url, plat)
     sid = db.add_stream(final_slug, url, plat, title)
     return final_slug, sid
+
+
+def remove(db: DB, cfg: Any, slug: str) -> dict[str, Any]:
+    """Tira o canal do painel e apaga clipes, thumbs e o buffer de work/."""
+    report = db.remove_stream(slug)
+    if not report.get("ok"):
+        return report
+
+    removed = 0
+    for raw in report.pop("files", []):
+        path = Path(raw)
+        if not path.is_absolute():
+            path = Path(cfg.out_dir) / path.name
+        for extra in (path, *(path.with_suffix(s) for s in (".jpg", ".json", ".txt", ".ass"))):
+            try:
+                if extra.is_file():
+                    extra.unlink()
+                    removed += 1
+            except OSError:
+                pass
+
+    shutil.rmtree(Path(cfg.work_dir) / slug, ignore_errors=True)
+    report["files"] = removed
+    return report
 
 
 def list_all(db: DB) -> list[dict[str, Any]]:
